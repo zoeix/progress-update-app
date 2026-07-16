@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Progress Update</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f7f9;
+        --panel: #ffffff;
+        --text: #1f2328;
+        --muted: #667085;
+        --line: #d9dee7;
+        --soft-line: #edf0f4;
+        --accent: #1f4e79;
+        --accent-hover: #183d5f;
+        --danger: #b42318;
+        --danger-bg: #fff4f2;
+        --notice-bg: #f0f7ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.5;
+      }
+
+      .shell {
+        width: min(1120px, calc(100vw - 32px));
+        margin: 24px auto 36px;
+      }
+
+      header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        margin-bottom: 0;
+        font-size: 28px;
+        font-weight: 650;
+        line-height: 1.15;
+        letter-spacing: 0;
+      }
+
+      h2 {
+        margin-bottom: 12px;
+        font-size: 16px;
+        font-weight: 650;
+        line-height: 1.25;
+        letter-spacing: 0;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .error {
+        margin-bottom: 18px;
+        padding: 12px 14px;
+        border: 1px solid #fecdca;
+        border-radius: 6px;
+        background: var(--danger-bg);
+        color: var(--danger);
+      }
+
+      .notice {
+        margin-bottom: 18px;
+        padding: 12px 14px;
+        border: 1px solid #b9dcff;
+        border-radius: 6px;
+        background: var(--notice-bg);
+        color: #17446b;
+      }
+
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+        gap: 16px;
+        align-items: start;
+        grid-template-areas:
+          "score score"
+          "draft questions";
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 18px;
+        box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+      }
+
+      label {
+        display: block;
+        margin-bottom: 6px;
+        color: #344054;
+        font-size: 13px;
+        font-weight: 650;
+      }
+
+      textarea {
+        width: 100%;
+        height: 180px;
+        resize: vertical;
+        overflow-y: auto;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 10px 12px;
+        font: inherit;
+        color: var(--text);
+        background: #fff;
+      }
+
+      select,
+      input {
+        width: 100%;
+        min-height: 40px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 8px 10px;
+        font: inherit;
+        color: var(--text);
+        background: #fff;
+      }
+
+      textarea:focus,
+      select:focus,
+      input:focus {
+        border-color: var(--accent);
+        outline: 3px solid rgba(31, 78, 121, 0.14);
+        outline-offset: 2px;
+      }
+
+      .draft-field {
+        min-height: 140px;
+        max-height: 320px;
+      }
+
+      .form-row {
+        margin-bottom: 14px;
+      }
+
+      .metadata-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 180px;
+        gap: 14px;
+        align-items: end;
+      }
+
+      .date-display {
+        display: flex;
+        align-items: center;
+        min-height: 40px;
+        border: 1px solid var(--soft-line);
+        border-radius: 6px;
+        padding: 8px 10px;
+        background: #f9fafb;
+        color: #475467;
+      }
+
+      .draft-panel {
+        grid-area: draft;
+      }
+
+      .questions-panel {
+        grid-area: questions;
+      }
+
+      .score-panel {
+        grid-area: score;
+      }
+
+      button {
+        margin-top: 8px;
+        border: 1px solid var(--accent);
+        border-radius: 6px;
+        background: var(--accent);
+        color: #fff;
+        padding: 8px 14px;
+        font: inherit;
+        font-weight: 650;
+        cursor: pointer;
+      }
+
+      button:hover:not(:disabled) {
+        background: var(--accent-hover);
+        border-color: var(--accent-hover);
+      }
+
+      button:disabled {
+        cursor: wait;
+        opacity: 0.72;
+      }
+
+      .secondary-button {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--text);
+      }
+
+      .secondary-button:hover:not(:disabled) {
+        background: #f9fafb;
+        border-color: #c8ced8;
+      }
+
+      .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .button-row form {
+        margin: 0;
+      }
+
+      .submit-status {
+        display: none;
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      form.is-submitting .submit-status {
+        display: block;
+      }
+
+      .score {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .score-panel {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 18px;
+      }
+
+      .score-panel h2 {
+        margin-bottom: 0;
+      }
+
+      .score strong {
+        font-size: 32px;
+        font-weight: 650;
+        line-height: 1;
+      }
+
+      .subscores {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(110px, 1fr));
+        gap: 8px;
+        flex: 1;
+      }
+
+      .subscore {
+        border-left: 1px solid var(--soft-line);
+        padding-left: 10px;
+      }
+
+      .subscore strong {
+        display: block;
+        font-size: 15px;
+        line-height: 1.2;
+      }
+
+      .subscore span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .question {
+        padding: 12px 0;
+        border-top: 1px solid var(--soft-line);
+      }
+
+      .question:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+
+      .priority {
+        display: inline-block;
+        margin-left: 6px;
+        color: #344054;
+        font-size: 12px;
+        font-weight: 650;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        text-transform: uppercase;
+      }
+
+      .question-status {
+        display: inline-block;
+        margin-left: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      }
+
+      @media (max-width: 860px) {
+        header {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .header-actions {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .grid {
+          grid-template-columns: 1fr;
+          grid-template-areas:
+            "score"
+            "draft"
+            "questions";
+        }
+
+        .score-panel {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .metadata-row {
+          grid-template-columns: 1fr;
+          gap: 0;
+        }
+
+        .button-row {
+          width: 100%;
+        }
+
+        button {
+          width: 100%;
+        }
+
+        .subscores {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <div>
+          <h1>Progress Update</h1>
+        </div>
+        <div class="header-actions">
+          <form action="/reset" method="post" data-confirm="確定要清空目前週報草稿、問題與評分紀錄嗎？">
+            <button class="secondary-button" type="submit">重設</button>
+          </form>
+          <form action="/finish" method="post" data-confirm="確定要重設目前進度並結束服務嗎？">
+            <button class="secondary-button" type="submit">結束</button>
+          </form>
+        </div>
+      </header>
+
+      {% if session["last_error"] %}
+        <div class="error">{{ session["last_error"] }}</div>
+      {% endif %}
+      {% if session["last_notice"] %}
+        <div class="notice">{{ session["last_notice"] }}</div>
+      {% endif %}
+
+      <div class="grid">
+        <aside class="panel score-panel">
+          <h2>內容評分</h2>
+          {% if entry %}
+            <div class="score">
+              <strong>{{ evaluation["score"] }}</strong>
+              <span class="muted">/ 100</span>
+            </div>
+
+            {% if evaluation["subscores"] %}
+              <div class="subscores">
+                {% for item in evaluation["subscores"] %}
+                  <div class="subscore">
+                    <strong>{{ item["score"] }} / {{ item["max_score"] }}</strong>
+                    <span>
+                      {% if item["name"] == "專案背景是否清楚" %}
+                        背景
+                      {% elif item["name"] == "本週進度是否足以判斷目前狀態" %}
+                        目前狀態
+                      {% elif item["name"] == "下週計畫是否可追蹤" %}
+                        下週計畫
+                      {% elif item["name"] == "專案健康度是否可判斷" %}
+                        健康度
+                      {% elif item["name"] == "Risk 與 Tag 是否足以支援管理決策" %}
+                        風險 / Tag
+                      {% else %}
+                        {{ item["name"] }}
+                      {% endif %}
+                    </span>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          {% else %}
+            <span class="muted">尚未評分</span>
+          {% endif %}
+        </aside>
+
+        <section class="panel draft-panel">
+          <form action="/progress" method="post">
+            <div class="metadata-row">
+              <div class="form-row">
+                <label for="project_name">專案名稱</label>
+                <select id="project_name" name="task_id" required>
+                  <option value="" {% if not form_state["task_id"] %}selected{% endif %}>請選擇專案</option>
+                  {% for project in projects %}
+                    <option value="{{ project['id'] }}" {% if form_state["task_id"] == project['id'] %}selected{% endif %}>{{ project["name"] }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="form-row">
+                <label>更新日期</label>
+                <div class="date-display">{{ today }}</div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label for="progress_text">進度內容</label>
+              <textarea class="draft-field" id="progress_text" name="progress_text" placeholder="# 本週進度：&#10;1. [進度] 已完成...&#10;&#10;# 下週進度：&#10;1. [待確認] 預計..." required>{{ form_state["progress_text"] }}</textarea>
+            </div>
+
+            <div class="button-row">
+              <button type="submit">檢查進度</button>
+              <button class="secondary-button" type="submit" formaction="/upload" data-confirm-upload="確定要將目前進度上傳到 ClickUp 嗎？">上傳進度</button>
+            </div>
+            <div class="submit-status" aria-live="polite">正在處理，請稍候...</div>
+          </form>
+        </section>
+
+        <section class="panel questions-panel">
+          <h2>待補充</h2>
+          {% if entry %}
+            {% if questions %}
+              {% for item in questions %}
+                <div class="question">
+                  <strong>問題 {{ loop.index }}：{{ item["question"] }}</strong>
+                  <span class="priority">{{ item["priority"] }}</span>
+                  <span class="question-status">{{ item["status"] }}</span>
+                  <p class="muted">{{ item["reason"] }}</p>
+                </div>
+              {% endfor %}
+            {% else %}
+              <p class="muted">無</p>
+            {% endif %}
+          {% else %}
+            <p class="muted">無</p>
+          {% endif %}
+        </section>
+      </div>
+    </main>
+    <script>
+      const latestEntryId = {{ entry["id"] if entry else "null" }};
+
+      const hasActiveDraftEdit = () => {
+        const active = document.activeElement;
+        return active && active.classList && active.classList.contains("draft-field");
+      };
+
+      const refreshIfCodexUpdated = async () => {
+        if (document.querySelector("form.is-submitting") || hasActiveDraftEdit()) {
+          return;
+        }
+        try {
+          const response = await fetch("/codex/progress/current", { cache: "no-store" });
+          if (!response.ok) {
+            return;
+          }
+          const progress = await response.json();
+          if (progress.entry_id && progress.entry_id !== latestEntryId) {
+            window.location.reload();
+          }
+        } catch (error) {
+          // Ignore transient polling errors; the next interval can recover.
+        }
+      };
+
+      window.setInterval(refreshIfCodexUpdated, 2000);
+
+      document.querySelectorAll("form").forEach((form) => {
+        form.addEventListener("submit", (event) => {
+          const message = form.dataset.confirm;
+          if (message && !window.confirm(message)) {
+            event.preventDefault();
+            return;
+          }
+          const submitter = event.submitter;
+          const submitAction = submitter ? submitter.getAttribute("formaction") || form.getAttribute("action") || "" : form.getAttribute("action") || "";
+          if (submitter && submitter.dataset.confirmUpload && !window.confirm(submitter.dataset.confirmUpload)) {
+            event.preventDefault();
+            return;
+          }
+          form.classList.add("is-submitting");
+          const status = form.querySelector(".submit-status");
+          if (status && submitAction.endsWith("/upload")) {
+            status.textContent = "正在上傳進度到 ClickUp，請稍候...";
+          } else if (status && submitAction.endsWith("/finish")) {
+            status.textContent = "正在重設進度並結束服務，請稍候...";
+          } else if (status) {
+            status.textContent = "正在檢查進度，請稍候...";
+          }
+          form.querySelectorAll("button").forEach((button) => {
+            button.disabled = true;
+            button.dataset.originalText = button.textContent;
+            button.textContent = "處理中...";
+          });
+        });
+      });
+    </script>
+  </body>
+</html>
