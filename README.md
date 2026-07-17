@@ -7,7 +7,7 @@
 - 每次啟動服務後先進入 ClickUp 登入頁。
 - 同步 ClickUp list 內的專案清單。
 - 使用單一「進度內容」編輯框撰寫週報草稿。
-- 顯示本機當日更新日期，時區使用 `Asia/Taipei`。
+- 顯示電腦本機當日更新日期。
 - 以 Manager Readiness Score 檢查進度是否足以支援主管判斷。
 - 顯示待補充問題。
 - 手動上傳進度到 ClickUp。
@@ -25,15 +25,32 @@ Python 套件列在 `requirements.txt`。
 
 ## 安裝
 
+macOS / Linux：
+
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 ```
 
+Windows PowerShell：
+
+```powershell
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
 ## 啟動
+
+macOS / Linux：
 
 ```bash
 .venv/bin/python app.py
+```
+
+Windows PowerShell：
+
+```powershell
+.venv\Scripts\python.exe app.py
 ```
 
 啟動後開啟：

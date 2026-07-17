@@ -11,7 +11,6 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from zoneinfo import ZoneInfo
 
 import httpx
 from dotenv import load_dotenv, set_key
@@ -39,7 +38,6 @@ CODEX_TIMEOUT_SECONDS = int(os.environ.get("CODEX_TIMEOUT_SECONDS", "90"))
 CODEX_MODEL = os.environ.get("CODEX_MODEL", "").strip()
 CLICKUP_API_BASE = "https://api.clickup.com/api/v2"
 CLICKUP_PAGE_SIZE = 100
-LOCAL_TZ = ZoneInfo("Asia/Taipei")
 
 STATE_EDITING = "editing_progress"
 STATE_NEEDS_MORE_INFO = "needs_more_info"
@@ -525,7 +523,7 @@ def run_codex_json(session_id: int, role: str, prompt_snapshot: str) -> Any:
 
 
 def today_label() -> str:
-    return datetime.now(LOCAL_TZ).strftime("%Y/%m/%d")
+    return datetime.now().strftime("%Y/%m/%d")
 
 
 def split_tagged_item(item: str) -> tuple[str, str]:
