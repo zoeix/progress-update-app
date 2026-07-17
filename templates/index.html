@@ -473,7 +473,9 @@
                   <strong>問題 {{ loop.index }}：{{ item["question"] }}</strong>
                   <span class="priority">{{ item["priority"] }}</span>
                   <span class="question-status">{{ item["status"] }}</span>
-                  <p class="muted">{{ item["reason"] }}</p>
+                  {% if item["reason"] %}
+                    <p class="muted">參考範例：{{ item["reason"] }}</p>
+                  {% endif %}
                 </div>
               {% endfor %}
             {% else %}
