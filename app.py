@@ -476,6 +476,8 @@ def run_codex_json(session_id: int, role: str, prompt_snapshot: str) -> Any:
     output_text = ""
     command = [
         get_codex_bin(),
+        "--config",
+        "service_tier=fast",
         "exec",
         "--skip-git-repo-check",
         "--sandbox",
@@ -491,6 +493,7 @@ def run_codex_json(session_id: int, role: str, prompt_snapshot: str) -> Any:
             command,
             input=prompt_snapshot,
             text=True,
+            encoding="utf-8",
             capture_output=True,
             timeout=CODEX_TIMEOUT_SECONDS,
             cwd=tempfile.gettempdir(),
