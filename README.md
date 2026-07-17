@@ -46,6 +46,7 @@ http://127.0.0.1:8000
 
 1. 啟動本機服務。
 2. 在登入頁輸入 `CLICKUP_TOKEN` 與 `CLICKUP_LIST_ID`。
+   - Windows 若 `codex` 不在 PATH，可在 `CODEX_BIN` 填入 `codex.cmd` 完整路徑。
 3. 進入進度頁後選擇專案。
 4. 確認右側更新日期。
 5. 在「進度內容」輸入草稿。
@@ -94,6 +95,7 @@ http://127.0.0.1:8000
 - SQLite database：`data/app.db`
 - Prompt 檔案：`prompts/`
 - ClickUp 設定：本機 `.env`
+- Codex 路徑設定：本機 `.env` 的 `CODEX_BIN`
 
 ClickUp token 不會送入 Codex prompt。
 

@@ -153,6 +153,10 @@
           <label for="clickup_list_id">CLICKUP_LIST_ID</label>
           <input id="clickup_list_id" name="clickup_list_id" type="text" autocomplete="off" value="{{ clickup_list_id }}" required>
 
+          <label for="codex_bin">CODEX_BIN（選填）</label>
+          <input id="codex_bin" name="codex_bin" type="text" autocomplete="off" value="{{ codex_bin }}" placeholder="例如 C:\Users\...\AppData\Roaming\npm\codex.cmd">
+          <p class="muted">找得到 Codex 時會自動帶入；留空則使用系統 PATH 的 codex。</p>
+
           <button type="submit">確認連線</button>
           <div class="submit-status" aria-live="polite">正在確認 ClickUp 連線並下載專案清單...</div>
         </form>

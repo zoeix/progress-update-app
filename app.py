@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import sqlite3
 import subprocess
 import tempfile
@@ -68,6 +69,34 @@ def get_clickup_token() -> str:
 
 def get_clickup_list_id() -> str:
     return os.environ.get("CLICKUP_LIST_ID", "").strip()
+
+
+def find_codex_bin() -> str:
+    configured = os.environ.get("CODEX_BIN", "").strip()
+    if configured:
+        return configured
+
+    from_path = shutil.which("codex")
+    if from_path:
+        return from_path
+
+    candidates: list[Path] = []
+    appdata = os.environ.get("APPDATA", "").strip()
+    if appdata:
+        candidates.append(Path(appdata) / "npm" / "codex.cmd")
+    local_appdata = os.environ.get("LOCALAPPDATA", "").strip()
+    if local_appdata:
+        candidates.append(Path(local_appdata) / "npm" / "codex.cmd")
+
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+
+    return ""
+
+
+def get_codex_bin() -> str:
+    return find_codex_bin() or "codex"
 
 
 def has_clickup_config() -> bool:
@@ -350,12 +379,14 @@ def post_clickup_comment(task_id: str, content: str) -> None:
     response.raise_for_status()
 
 
-def save_clickup_config(clickup_token: str, clickup_list_id: str) -> None:
+def save_clickup_config(clickup_token: str, clickup_list_id: str, codex_bin: str = "") -> None:
     ENV_PATH.touch(exist_ok=True)
     set_key(str(ENV_PATH), "CLICKUP_TOKEN", clickup_token)
     set_key(str(ENV_PATH), "CLICKUP_LIST_ID", clickup_list_id)
+    set_key(str(ENV_PATH), "CODEX_BIN", codex_bin)
     os.environ["CLICKUP_TOKEN"] = clickup_token
     os.environ["CLICKUP_LIST_ID"] = clickup_list_id
+    os.environ["CODEX_BIN"] = codex_bin
 
 
 def set_session_error(conn: sqlite3.Connection, session_id: int, error: str | None) -> None:
@@ -446,7 +477,7 @@ def run_codex_json(session_id: int, role: str, prompt_snapshot: str) -> Any:
     run_finished = False
     output_text = ""
     command = [
-        "codex",
+        get_codex_bin(),
         "exec",
         "--skip-git-repo-check",
         "--sandbox",
@@ -981,6 +1012,7 @@ def login_page(request: Request):
             "request": request,
             "clickup_token": get_clickup_token(),
             "clickup_list_id": get_clickup_list_id(),
+            "codex_bin": find_codex_bin(),
             "error": "",
             "project_count": None,
         },
@@ -992,10 +1024,12 @@ def save_login(
     request: Request,
     clickup_token: str = Form(...),
     clickup_list_id: str = Form(...),
+    codex_bin: str = Form(""),
 ):
     global clickup_session_active
     clean_token = clickup_token.strip()
     clean_list_id = clickup_list_id.strip()
+    clean_codex_bin = codex_bin.strip()
     if not clean_token or not clean_list_id:
         return templates.TemplateResponse(
             "login.html",
@@ -1003,6 +1037,7 @@ def save_login(
                 "request": request,
                 "clickup_token": clean_token,
                 "clickup_list_id": clean_list_id,
+                "codex_bin": clean_codex_bin,
                 "error": "請輸入 CLICKUP_TOKEN 與 CLICKUP_LIST_ID。",
                 "project_count": None,
             },
@@ -1018,13 +1053,14 @@ def save_login(
                 "request": request,
                 "clickup_token": clean_token,
                 "clickup_list_id": clean_list_id,
+                "codex_bin": clean_codex_bin,
                 "error": f"ClickUp 連線失敗：{exc}",
                 "project_count": None,
             },
             status_code=400,
         )
 
-    save_clickup_config(clean_token, clean_list_id)
+    save_clickup_config(clean_token, clean_list_id, clean_codex_bin)
     clickup_session_active = True
     with get_db() as conn:
         save_clickup_projects(conn, projects)

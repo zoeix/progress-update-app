@@ -33,6 +33,9 @@
 - [x] 建立 ClickUp 設定頁。
 - [x] 支援輸入 `CLICKUP_TOKEN`。
 - [x] 支援輸入 `CLICKUP_LIST_ID`。
+- [x] 支援選填 `CODEX_BIN`。
+- [x] 登入頁會自動偵測 Codex 路徑，找不到時留空讓使用者自行填入。
+- [x] 登入成功後將 `CODEX_BIN` 寫入 `.env` 與目前程序環境變數。
 - [x] 驗證 ClickUp 連線。
 - [x] 同步 ClickUp list 內的 task 作為專案清單。
 - [x] 將專案清單存入 SQLite。
