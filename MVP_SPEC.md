@@ -1,213 +1,208 @@
-# progress-update-app MVP Spec
+# progress-update-app MVP 規格
 
-## Goal
+## 目標
 
-Build a local web app where a user can draft a progress update, have Codex organize it into a fixed format, evaluate completeness, ask follow-up questions, and then confirm the final content before the backend updates ClickUp.
+建立一個本機網頁工具，讓使用者可以輸入專案進度，透過 Codex 依固定格式整理內容、評估主管是否能直接判斷專案狀態，並在使用者確認後上傳到 ClickUp。
 
-## Target User Flow
+此工具的核心不是美化文字，而是讓進度更新足以支援主管做管理決策。
 
-1. User starts the local Python web app.
-2. User opens the local browser UI.
-3. User enters a ClickUp API key if one is not already configured.
-4. Backend validates the API key and stores it locally.
-5. User enters or selects a ClickUp task ID.
-6. User enters progress-update text.
-7. Backend saves the raw input to SQLite.
-8. Backend builds controlled context from local SQLite data.
-9. Backend asks Codex to run the progress refinement workflow:
-   - format the progress update
-   - score completeness
-   - generate follow-up questions
-10. Backend saves Codex prompts, outputs, score, and questions.
-11. UI shows the formatted update, score, and follow-up questions.
-12. User answers follow-up questions or edits the progress content.
-13. When the update is complete enough, UI shows a final ClickUp preview.
-14. User explicitly confirms the update.
-15. Backend calls ClickUp API and saves the update result.
+## 使用者流程
 
-## Product Scope
+1. 使用者以 `.venv/bin/python app.py` 啟動本機服務。
+2. 每次服務啟動後，首頁會先導向登入頁。
+3. 使用者輸入 ClickUp token 與 list id。
+4. 後端驗證 ClickUp 連線，並同步該 list 的專案清單。
+5. 使用者進入進度更新頁。
+6. 使用者從專案選單選擇專案。
+7. 右側顯示當日更新日期，日期取自本機執行環境並以 `Asia/Taipei` 顯示。
+8. 使用者在單一「進度內容」編輯框輸入完整草稿。
+9. 使用者點擊「檢查進度」。
+10. 後端將專案名稱與進度內容送入 Codex workflow。
+11. Codex 回傳格式化進度、Manager Readiness Score、缺漏資訊與追問。
+12. UI 顯示評分與待補充問題。
+13. 使用者可修改同一個進度內容編輯框後再次檢查。
+14. 使用者可點擊「上傳進度」將目前編輯框內容上傳到 ClickUp。
+15. 使用者可點擊「重設」清空目前草稿、問題、評分與 Codex run。
+16. 使用者可點擊「結束」清空目前資料並關閉本機服務。
 
-### In Scope
+## 產品範圍
 
-- Local-only Python web app.
-- SQLite for app state, session history, Codex run records, and ClickUp update records.
-- Simple browser UI.
-- ClickUp API key entry and validation.
-- One active progress-update session at a time for the initial MVP.
-- Codex used only for progress refinement.
-- Deterministic backend logic for ClickUp key handling and final ClickUp update.
-- Final preview before any ClickUp write.
+### 包含
 
-### Out of Scope
+- 本機 FastAPI 網頁服務。
+- Jinja2 template 前端。
+- SQLite 儲存 session、進度紀錄、問題與 Codex run。
+- ClickUp token 與 list id 設定頁。
+- ClickUp 專案清單同步。
+- 單一進度內容編輯框。
+- Codex workflow：
+  - 格式化進度內容。
+  - 依 Manager Readiness Score 評分。
+  - 產生主管決策所需的追問。
+- 前端顯示：
+  - 專案選單。
+  - 當日更新日期。
+  - 進度內容編輯框。
+  - 內容評分。
+  - 待補充問題。
+  - 重設、結束、檢查進度、上傳進度。
+- 使用者明確點擊後才上傳到 ClickUp。
 
-- Multi-user authentication.
-- Cloud deployment.
-- Electron or Tauri desktop packaging.
-- Multiple ClickUp workspace management.
-- Realtime Codex streaming.
-- Letting Codex access the ClickUp API key.
-- Letting Codex directly call ClickUp APIs.
-- Automatic ClickUp updates without explicit user confirmation.
-- Complex analytics or reporting.
+### 不包含
 
-## Architecture
+- 多使用者登入。
+- 雲端部署。
+- 桌面應用程式封裝。
+- 多個 ClickUp workspace 管理。
+- Codex streaming。
+- 讓 Codex 直接呼叫 ClickUp API。
+- 自動上傳 ClickUp。
+- 複雜報表或分析儀表板。
+
+## 畫面行為
+
+### 登入頁
+
+- 顯示 ClickUp 設定表單。
+- 欄位：
+  - `CLICKUP_TOKEN`
+  - `CLICKUP_LIST_ID`
+- 登入成功後同步 ClickUp 專案清單並進入首頁。
+- 每次服務重啟後都要重新登入，避免直接跳入進度頁。
+
+### 進度頁
+
+- 左上顯示產品標題。
+- 右上顯示：
+  - `重設`
+  - `結束`
+- 表單上方同一列顯示：
+  - 專案名稱選單。
+  - 更新日期。
+- 進度內容使用單一編輯框，建議格式：
+
+```text
+# 本週進度：
+1. [進度] 已完成...
+
+# 下週進度：
+1. [待確認] 預計...
+```
+
+- 「檢查進度」會執行 Codex workflow。
+- 「上傳進度」會將目前編輯框內容上傳到 ClickUp。
+- 「重設」只清空目前資料，服務繼續執行。
+- 「結束」清空目前資料並關閉服務。
+
+## 進度格式
+
+Codex 格式化後的 JSON 結構：
+
+```json
+{
+  "project_name": "",
+  "this_week_progress": [
+    {
+      "tag": "[進度]",
+      "text": ""
+    }
+  ],
+  "next_week_plan": [
+    {
+      "tag": "[待確認]",
+      "text": ""
+    }
+  ],
+  "notes": []
+}
+```
+
+最終文字格式不包含更新日期：
+
+```text
+專案名稱: 專案名稱
+
+# 本週進度：
+1. [進度] ...
+
+# 下週進度：
+1. [待確認] ...
+```
+
+## 合法 Tag
+
+- `[Risk: Low]`
+- `[Risk: Medium]`
+- `[Risk: High]`
+- `[里程碑]`
+- `[進度]`
+- `[待確認]`
+
+## Manager Readiness Score
+
+評分目的：判斷這份進度是否足以讓主管在不額外追問的情況下掌握狀態、判斷是否需要介入，並安排後續工作。
+
+子項目：
+
+- 背景：15 分
+- 目前狀態：30 分
+- 下週計畫：20 分
+- 健康度：20 分
+- 風險 / Tag：15 分
+
+高分代表主管能回答：
+
+- 現在做到哪裡？
+- 下一步是什麼？
+- 專案健康度如何？
+- 是否需要主管介入？
+
+## 架構
 
 ```text
 Browser UI
   -> FastAPI backend
       -> SQLite local database
-      -> Codex workflow for progress refinement
-      -> ClickUp API client for validation and final update
+      -> Codex workflow
+      -> ClickUp API client
 ```
 
-## State Machine
+## 後端責任
 
-```text
-needs_api_key
-editing_progress
-needs_more_info
-ready_for_review
-updating_clickup
-updated
-update_failed
-```
+- 管理本機 session 狀態。
+- 初始化 SQLite。
+- 驗證 ClickUp token 與 list id。
+- 同步 ClickUp 專案清單。
+- 建立 Codex workflow prompt。
+- 解析與驗證 Codex JSON output。
+- 儲存 prompt snapshot、output、錯誤與評分。
+- 在 Codex 失敗時將錯誤顯示在 UI。
+- 上傳進度到 ClickUp。
+- 重設或結束服務。
 
-### State Descriptions
+## Codex 責任
 
-- `needs_api_key`: No valid ClickUp API key is available.
-- `editing_progress`: User is drafting or editing progress content.
-- `needs_more_info`: Codex found missing information and generated questions.
-- `ready_for_review`: Content is complete enough to preview before updating ClickUp.
-- `updating_clickup`: Backend is sending the confirmed update to ClickUp.
-- `updated`: ClickUp update succeeded.
-- `update_failed`: ClickUp update failed and the user can retry or edit.
+Codex 只負責進度內容處理，不得接觸 ClickUp token，也不得呼叫 ClickUp API。
 
-## Codex Responsibilities
+Codex workflow 一次完成：
 
-Codex is used only inside the progress refinement workflow.
+- 格式化進度。
+- 評估 Manager Readiness Score。
+- 判斷既有問題狀態。
+- 產生最多 3 個追問。
 
-### 1. Formatter
+輸出必須是合法 JSON。
 
-Input:
-
-- current user progress text
-- controlled session context from SQLite
-- required update format
-
-Output:
-
-```json
-{
-  "done": [],
-  "in_progress": [],
-  "blocked": [],
-  "next_steps": [],
-  "risks": [],
-  "notes": []
-}
-```
-
-Rules:
-
-- Do not ask questions.
-- Do not score completeness.
-- Do not invent facts.
-- Preserve uncertainty when the user input is unclear.
-
-### 2. Completeness Evaluator
-
-Input:
-
-- formatter output
-- scoring rubric
-- relevant session context
-
-Output:
-
-```json
-{
-  "score": 0,
-  "missing_fields": [],
-  "strengths": [],
-  "ready_for_review": false
-}
-```
-
-Initial scoring rubric:
-
-- Completed work clarity: 25
-- Current status clarity: 20
-- Blockers and risks clarity: 20
-- Next steps clarity: 20
-- Dates, owners, and dependencies: 15
-
-Rules:
-
-- Do not rewrite the formatted update.
-- Explain important missing information.
-- Mark `ready_for_review` only when the update is actionable and clear enough.
-
-### 3. Question Generator
-
-Input:
-
-- formatter output
-- evaluator output
-- previous question history
-
-Output:
-
-```json
-{
-  "questions": [
-    {
-      "id": "q1",
-      "question": "",
-      "reason": "",
-      "priority": "high"
-    }
-  ]
-}
-```
-
-Rules:
-
-- Ask at most 3 questions per turn.
-- Prefer 1 high-value question when possible.
-- Do not repeat recently answered questions.
-- Questions should target missing information needed for ClickUp-ready progress updates.
-
-## Non-Codex Responsibilities
-
-### ClickUp API Key Flow
-
-- Backend asks for the API key when missing.
-- Backend validates the key with ClickUp.
-- Backend stores the key locally.
-- The key must not be included in Codex prompts, prompt snapshots, logs, or UI debug output.
-
-Initial MVP storage choice:
-
-- Use SQLite app data for non-secret metadata.
-- Store the actual API key in a local ignored file or OS credential store.
-- Do not store secrets inside `.venv`.
-
-### Final Update Flow
-
-- Backend prepares final ClickUp payload deterministically.
-- UI shows the exact final preview.
-- User must click confirm before the backend writes to ClickUp.
-- Backend saves payload snapshot, response snapshot, status, and timestamp.
-
-## SQLite Data Model Draft
+## SQLite 資料表
 
 ### `sessions`
 
 - `id`
 - `title`
 - `state`
-- `clickup_task_id`
 - `running_summary`
+- `last_error`
+- `last_notice`
 - `created_at`
 - `updated_at`
 
@@ -219,6 +214,7 @@ Initial MVP storage choice:
 - `formatted_json`
 - `evaluation_json`
 - `questions_json`
+- `final_text`
 - `created_at`
 
 ### `questions`
@@ -229,6 +225,10 @@ Initial MVP storage choice:
 - `question`
 - `reason`
 - `priority`
+- `target_field`
+- `status`
+- `review_reason`
+- `previous_question_id`
 - `answer`
 - `answered_at`
 - `created_at`
@@ -247,95 +247,23 @@ Initial MVP storage choice:
 - `created_at`
 - `updated_at`
 
-### `clickup_config`
+### `clickup_projects`
 
 - `id`
-- `api_key_configured`
-- `workspace_hint`
-- `created_at`
-- `updated_at`
-
-### `clickup_updates`
-
-- `id`
-- `session_id`
-- `clickup_task_id`
-- `payload_snapshot`
-- `response_snapshot`
+- `name`
 - `status`
-- `error`
-- `created_at`
-- `updated_at`
+- `url`
+- `raw_json`
+- `synced_at`
 
-## Context Window Strategy
+## 成功標準
 
-The app controls Codex context from local data instead of relying on Codex session history.
-
-For each Codex run, the backend builds a prompt from:
-
-- fixed role instruction
-- required output schema
-- session running summary
-- pinned facts, if added later
-- recent progress entries
-- relevant unanswered questions
-- current user input
-
-Every Codex run stores its full `prompt_snapshot` for debugging and replay.
-
-## Initial Technical Stack
-
-- Python 3.11+
-- FastAPI
-- Uvicorn
-- Jinja2 templates
-- HTMX or simple form posts
-- SQLite via Python `sqlite3`
-- `httpx` for ClickUp API calls
-- Codex through subprocess first, with SDK migration later if needed
-
-## Implementation Plan
-
-### Step 1: App Skeleton
-
-- Create FastAPI app.
-- Add homepage.
-- Initialize SQLite database.
-- Create one default session.
-
-### Step 2: ClickUp API Key Flow
-
-- Add API key form.
-- Validate API key with ClickUp.
-- Store local configuration.
-- Keep API key out of Codex prompts and logs.
-
-### Step 3: Progress Input Flow
-
-- Add progress input form.
-- Save raw input to SQLite.
-- Use fake Codex output to validate UI and database flow.
-
-### Step 4: Codex Workflow
-
-- Add formatter prompt.
-- Add evaluator prompt.
-- Add question-generator prompt.
-- Save prompt snapshots and outputs.
-
-### Step 5: Review and Update
-
-- Show final preview.
-- Require explicit confirmation.
-- Call ClickUp API.
-- Save update result and errors.
-
-## MVP Success Criteria
-
-- User can run the app locally.
-- User can enter and validate a ClickUp API key.
-- User can enter progress text.
-- App saves raw input and Codex outputs locally.
-- App shows formatted update, score, and follow-up questions.
-- User can confirm final preview before ClickUp update.
-- Backend updates ClickUp only after explicit confirmation.
+- 使用者可以啟動本機服務。
+- 每次重啟後會先進入登入頁。
+- 使用者可以完成 ClickUp 設定並同步專案清單。
+- 使用者可以在單一編輯框輸入進度內容。
+- 使用者可以檢查進度並看到評分與追問。
+- 使用者可以修改內容後再次檢查。
+- 使用者可以明確上傳目前內容到 ClickUp。
+- 使用者可以重設目前資料。
+- 使用者可以結束服務。
