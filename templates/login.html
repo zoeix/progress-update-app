@@ -124,6 +124,21 @@
         opacity: 0.72;
       }
 
+      .secondary-button {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--text);
+      }
+
+      .secondary-button:hover:not(:disabled) {
+        background: #f9fafb;
+        border-color: #c8ced8;
+      }
+
+      .finish-form {
+        margin-top: 12px;
+      }
+
       .submit-status {
         display: none;
         margin-top: 12px;
@@ -160,12 +175,25 @@
           <button type="submit">確認連線</button>
           <div class="submit-status" aria-live="polite">正在確認 ClickUp 連線並下載專案清單...</div>
         </form>
+        <form class="finish-form" action="/finish" method="post" data-confirm="確定要重設目前進度並結束服務嗎？">
+          <button class="secondary-button" type="submit">結束</button>
+          <div class="submit-status" aria-live="polite">正在重設進度並結束服務，請稍候...</div>
+        </form>
       </section>
     </main>
     <script>
       document.querySelectorAll("form").forEach((form) => {
-        form.addEventListener("submit", () => {
+        form.addEventListener("submit", (event) => {
+          const message = form.dataset.confirm;
+          if (message && !window.confirm(message)) {
+            event.preventDefault();
+            return;
+          }
           form.classList.add("is-submitting");
+          const status = form.querySelector(".submit-status");
+          if (status && form.action.endsWith("/finish")) {
+            status.textContent = "正在重設進度並結束服務，請稍候...";
+          }
           form.querySelectorAll("button").forEach((button) => {
             button.disabled = true;
             button.textContent = "處理中...";
