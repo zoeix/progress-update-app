@@ -8,7 +8,7 @@
 - 同步 ClickUp list 內的專案清單。
 - 使用單一「進度內容」編輯框撰寫週報草稿。
 - 顯示電腦本機當日更新日期。
-- 以 Manager Readiness Score 檢查進度是否足以支援主管判斷。
+- 以 PM 內容顆粒度評分檢查進度是否夠具體。
 - 顯示待補充問題。
 - 手動上傳進度到 ClickUp。
 - 支援重設目前資料。
@@ -71,6 +71,39 @@ http://127.0.0.1:8000
 7. 依評分與待補充問題修改內容。
 8. 確認內容後點擊「上傳進度」。
 
+## Codex CLI 接口
+
+可以用 HTTP API 模擬登入頁的「確認連線」按鈕，服務會使用 `.env` 內的 `CLICKUP_TOKEN` 與 `CLICKUP_LIST_ID`，連到 ClickUp 並同步專案清單。
+
+```bash
+curl -sS -X POST http://127.0.0.1:8000/codex/clickup/connect
+```
+
+或使用專案腳本：
+
+```bash
+.venv/bin/python scripts/connect_clickup.py
+```
+
+成功會回傳：
+
+```json
+{
+  "ok": true,
+  "message": "ClickUp 連線成功，已同步專案清單。",
+  "project_count": 0,
+  "clickup_list_id": "..."
+}
+```
+
+也可以用 JSON body 覆蓋設定：
+
+```bash
+curl -sS -X POST http://127.0.0.1:8000/codex/clickup/connect \
+  -H "Content-Type: application/json" \
+  -d '{"clickup_token":"...","clickup_list_id":"...","codex_bin":""}'
+```
+
 建議進度格式：
 
 ```text
@@ -88,15 +121,15 @@ http://127.0.0.1:8000
 
 ## 評分
 
-品質分數使用 Manager Readiness Score，重點是主管是否能直接判斷專案狀態與是否需要介入。
+品質分數用來幫助 PM 自我檢查進度是否完整、聚焦、可量化、容易被非技術讀者理解，並呈現後續影響。
 
 評分項目：
 
-- 背景：15 分
-- 目前狀態：30 分
-- 下週計畫：20 分
-- 健康度：20 分
-- 風險 / Tag：15 分
+- 完整度：10 分
+- 顆粒度：20 分
+- 量化與風險：30 分
+- 解釋性：20 分
+- 影響力與延展：20 分
 
 ## 合法 Tag
 

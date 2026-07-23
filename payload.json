@@ -1,0 +1,15 @@
+{
+  "raw_input": "onbaording更新三張報表",
+  "formatted": {
+    "project_name": "Customer Onboarding Portal Enhancement",
+    "date": "2026-07-24",
+    "this_week_progress": [
+      {
+        "tag": "[進度]",
+        "text": "Onboarding 更新三張報表"
+      }
+    ],
+    "next_week_plan": [],
+    "notes": []
+  }
+}

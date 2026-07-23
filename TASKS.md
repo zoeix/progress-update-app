@@ -12,7 +12,7 @@
 4. 選擇專案。
 5. 在單一進度內容編輯框輸入草稿。
 6. 點擊「檢查進度」執行 Codex workflow。
-7. 查看 Manager Readiness Score 與待補充問題。
+7. 查看 PM 內容顆粒度評分與待補充問題。
 8. 視需要修改內容並再次檢查。
 9. 點擊「上傳進度」寫入 ClickUp。
 10. 可使用「重設」清空目前資料，或使用「結束」清空資料並關閉服務。
@@ -55,14 +55,13 @@
 
 ### Prompt 與 Codex Workflow
 
-- [x] 建立 `prompts/format_progress.md`。
-- [x] 建立 `prompts/quality_score.md`。
-- [x] 建立 `prompts/question_generation.md`。
-- [x] 建立 `prompts/granularity_guidance.md`。
-- [x] 將品質評分改為 Manager Readiness Score。
-- [x] 評分項目改為：背景、目前狀態、下週計畫、健康度、風險 / Tag。
+- [x] 建立 `prompts/formatted.md`。
+- [x] 建立 `prompts/evaluation.md`。
+- [x] 建立 `prompts/question_result.md`。
+- [x] 將品質評分改為 PM 內容顆粒度評分。
+- [x] 評分項目改為：完整度、顆粒度、量化與風險、解釋性、影響力與延展。
 - [x] 從 format prompt 移除日期欄位與日期輸出。
-- [x] Codex workflow 一次完成格式化、評分、問題狀態檢查與追問產生。
+- [x] Codex workflow 一次完成格式化、評分與追問產生。
 - [x] Codex output 必須解析為 JSON。
 - [x] Codex JSON 解析失敗時顯示 output preview，方便除錯。
 - [x] Codex subprocess 改在 `/tmp` 執行，避免專案 `AGENTS.md` 污染輸出。
@@ -72,8 +71,7 @@
 - [x] 顯示總分。
 - [x] 顯示 5 個簡短子項目。
 - [x] 顯示待補充問題。
-- [x] 問題依主管決策需求產生。
-- [x] 支援上一輪問題狀態檢查。
+- [x] 問題依內容顆粒度缺口產生。
 
 ### 上傳與資料管理
 
@@ -112,7 +110,7 @@
 - [x] 將 `MVP_SPEC.md` 改為繁體中文。
 - [x] 將 `TASKS.md` 改為繁體中文。
 - [x] 更新文件以符合目前單一進度內容編輯框。
-- [x] 更新文件以符合 Manager Readiness Score。
+- [x] 更新文件以符合 PM 內容顆粒度評分。
 - [x] 更新文件以符合重設與結束流程。
 - [ ] 補充本機啟動與重啟操作說明。
 - [ ] 補充常見錯誤排查。
@@ -126,7 +124,7 @@
 - [x] 使用者可以看到當日更新日期。
 - [x] 使用者可以在單一進度內容框編輯草稿。
 - [x] 使用者可以檢查進度。
-- [x] 使用者可以看到 Manager Readiness Score。
+- [x] 使用者可以看到 PM 內容顆粒度評分。
 - [x] 使用者可以看到待補充問題。
 - [x] 使用者可以上傳進度到 ClickUp。
 - [x] 使用者可以重設目前資料。

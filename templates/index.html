@@ -315,15 +315,6 @@
         text-transform: uppercase;
       }
 
-      .question-status {
-        display: inline-block;
-        margin-left: 6px;
-        color: var(--muted);
-        font-size: 12px;
-        font-weight: 700;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      }
-
       @media (max-width: 860px) {
         header {
           align-items: flex-start;
@@ -409,7 +400,27 @@
                   <div class="subscore">
                     <strong>{{ item["score"] }} / {{ item["max_score"] }}</strong>
                     <span>
-                      {% if item["name"] == "專案背景是否清楚" %}
+                      {% if item["name"] == "完整度" %}
+                        完整度
+                      {% elif item["name"] == "顆粒度" %}
+                        顆粒度
+                      {% elif item["name"] == "量化與風險" %}
+                        量化風險
+                      {% elif item["name"] == "解釋性" %}
+                        解釋性
+                      {% elif item["name"] == "影響力與延展" %}
+                        影響延展
+                      {% elif item["name"] == "範圍清楚度" %}
+                        範圍
+                      {% elif item["name"] == "狀態具體度" %}
+                        狀態
+                      {% elif item["name"] == "成果可驗收性" %}
+                        成果
+                      {% elif item["name"] == "下一步可追蹤性" %}
+                        下一步
+                      {% elif item["name"] == "風險與依賴明確度" %}
+                        風險依賴
+                      {% elif item["name"] == "專案背景是否清楚" %}
                         背景
                       {% elif item["name"] == "本週進度是否足以判斷目前狀態" %}
                         目前狀態
@@ -472,7 +483,6 @@
                 <div class="question">
                   <strong>問題 {{ loop.index }}：{{ item["question"] }}</strong>
                   <span class="priority">{{ item["priority"] }}</span>
-                  <span class="question-status">{{ item["status"] }}</span>
                   {% if item["reason"] %}
                     <p class="muted">參考範例：{{ item["reason"] }}</p>
                   {% endif %}

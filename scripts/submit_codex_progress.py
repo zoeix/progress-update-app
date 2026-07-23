@@ -5,6 +5,7 @@ import json
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 
@@ -58,14 +59,27 @@ def validate_payload(payload: Any) -> dict[str, Any]:
     return payload
 
 
+def read_payload_text(args: argparse.Namespace) -> str:
+    if args.payload is not None:
+        return args.payload
+    if args.payload_file is not None:
+        return Path(args.payload_file).read_text(encoding="utf-8")
+    if args.payload_stdin:
+        return sys.stdin.read()
+    fail("one of --payload, --payload-file, or --payload-stdin is required")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Submit a VSCode Codex progress update.")
-    parser.add_argument("--payload", required=True, help="Progress update JSON payload.")
+    payload_source = parser.add_mutually_exclusive_group(required=True)
+    payload_source.add_argument("--payload", help="Progress update JSON payload.")
+    payload_source.add_argument("--payload-file", help="UTF-8 JSON file containing the progress update payload.")
+    payload_source.add_argument("--payload-stdin", action="store_true", help="Read the progress update JSON payload from stdin.")
     parser.add_argument("--base-url", default="http://127.0.0.1:8000", help="Local app base URL.")
     args = parser.parse_args()
 
     try:
-        payload = validate_payload(json.loads(args.payload))
+        payload = validate_payload(json.loads(read_payload_text(args)))
     except json.JSONDecodeError as exc:
         fail(f"payload is not valid JSON: {exc}")
 

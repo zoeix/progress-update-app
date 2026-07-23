@@ -8,6 +8,7 @@ import sqlite3
 import subprocess
 import tempfile
 import threading
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -27,13 +28,11 @@ PROMPTS_DIR = BASE_DIR / "prompts"
 load_dotenv(ENV_PATH)
 
 PROMPT_FILES = {
-    "format_progress": "format_progress.md",
-    "granularity_guidance": "granularity_guidance.md",
-    "quality_score": "quality_score.md",
-    "question_generation": "question_generation.md",
+    "formatted": "formatted.md",
+    "evaluation": "evaluation.md",
+    "question_result": "question_result.md",
 }
 VALID_TAGS = {"[Risk: Low]", "[Risk: Medium]", "[Risk: High]", "[里程碑]", "[進度]", "[待確認]"}
-QUESTION_STATUSES = {"resolved", "invalid", "unresolved"}
 CODEX_TIMEOUT_SECONDS = int(os.environ.get("CODEX_TIMEOUT_SECONDS", "90"))
 CODEX_MODEL = os.environ.get("CODEX_MODEL", "").strip()
 CLICKUP_API_BASE = "https://api.clickup.com/api/v2"
@@ -46,6 +45,19 @@ STATE_READY_FOR_REVIEW = "ready_for_review"
 app = FastAPI(title="Progress Update App")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 clickup_session_active = False
+
+
+@dataclass(frozen=True)
+class CodexRunSpec:
+    session_id: int
+    role: str
+    prompt_snapshot: str
+
+
+class CodexCliError(RuntimeError):
+    def __init__(self, message: str, output_text: str):
+        super().__init__(message)
+        self.output_text = output_text
 
 
 def utc_now() -> str:
@@ -250,27 +262,6 @@ def get_questions(conn: sqlite3.Connection, entry_id: int | None) -> list[sqlite
     ).fetchall()
 
 
-def get_latest_questions_for_session(conn: sqlite3.Connection, session_id: int) -> list[sqlite3.Row]:
-    latest_entry = get_latest_entry(conn, session_id)
-    return get_questions(conn, latest_entry["id"] if latest_entry else None)
-
-
-def serialize_previous_questions(questions: list[sqlite3.Row]) -> list[dict[str, str]]:
-    previous_questions = []
-    for question in questions:
-        previous_questions.append(
-            {
-                "id": str(question["id"]),
-                "target_field": question["target_field"],
-                "question": question["question"],
-                "reason": question["reason"],
-                "priority": question["priority"],
-                "status": question["status"] if "status" in question.keys() else "unresolved",
-            }
-        )
-    return previous_questions
-
-
 def fetch_clickup_projects(clickup_token: str, clickup_list_id: str) -> list[dict[str, Any]]:
     projects: list[dict[str, Any]] = []
     headers = {"Authorization": clickup_token}
@@ -387,6 +378,20 @@ def save_clickup_config(clickup_token: str, clickup_list_id: str, codex_bin: str
     os.environ["CODEX_BIN"] = codex_bin
 
 
+def connect_clickup(clickup_token: str, clickup_list_id: str, codex_bin: str = "") -> int:
+    clean_token = clickup_token.strip()
+    clean_list_id = clickup_list_id.strip()
+    clean_codex_bin = codex_bin.strip()
+    if not clean_token or not clean_list_id:
+        raise ValueError("請輸入 CLICKUP_TOKEN 與 CLICKUP_LIST_ID。")
+
+    projects = fetch_clickup_projects(clean_token, clean_list_id)
+    save_clickup_config(clean_token, clean_list_id, clean_codex_bin)
+    with get_db() as conn:
+        save_clickup_projects(conn, projects)
+    return len(projects)
+
+
 def set_session_error(conn: sqlite3.Connection, session_id: int, error: str | None) -> None:
     conn.execute(
         """
@@ -469,11 +474,23 @@ def finish_codex_run(
         )
 
 
-def run_codex_json(session_id: int, role: str, prompt_snapshot: str) -> Any:
-    run_id = create_codex_run(session_id, role, prompt_snapshot)
+def get_codex_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
+    return conn.execute(
+        """
+        SELECT *
+        FROM codex_runs
+        WHERE id = ?
+        """,
+        (run_id,),
+    ).fetchone()
+
+
+def prepare_codex_run(session_id: int, role: str, prompt_snapshot: str) -> CodexRunSpec:
+    return CodexRunSpec(session_id=session_id, role=role, prompt_snapshot=prompt_snapshot)
+
+
+def run_codex_cli(run_id: int, role: str, prompt_snapshot: str) -> str:
     output_path = Path(tempfile.gettempdir()) / f"progress-update-{role}-{run_id}.json"
-    run_finished = False
-    output_text = ""
     command = [
         get_codex_bin(),
         "--config",
@@ -499,17 +516,43 @@ def run_codex_json(session_id: int, role: str, prompt_snapshot: str) -> Any:
             cwd=tempfile.gettempdir(),
             check=False,
         )
-        output_text = output_path.read_text(encoding="utf-8") if output_path.exists() else (result.stdout or result.stderr)
+        output_text = (
+            output_path.read_text(encoding="utf-8")
+            if output_path.exists()
+            else (result.stdout or result.stderr)
+        )
         if result.returncode != 0:
             error = (result.stderr or result.stdout or f"codex exited {result.returncode}").strip()
-            finish_codex_run(run_id, "error", output_text, error=error)
-            run_finished = True
-            raise RuntimeError(error)
+            raise CodexCliError(error, output_text)
+        return output_text
+    finally:
+        try:
+            output_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
-        output_json = extract_json_object(output_text)
-        finish_codex_run(run_id, "success", output_text, output_json)
+
+def complete_codex_json_run(run_id: int, output_text: str) -> Any:
+    output_json = extract_json_object(output_text)
+    finish_codex_run(run_id, "success", output_text, output_json)
+    return output_json
+
+
+def run_codex_json(session_id: int, role: str, prompt_snapshot: str) -> Any:
+    spec = prepare_codex_run(session_id, role, prompt_snapshot)
+    run_id = create_codex_run(spec.session_id, spec.role, spec.prompt_snapshot)
+    output_text = ""
+    run_finished = False
+    try:
+        output_text = run_codex_cli(run_id, spec.role, spec.prompt_snapshot)
+        output_json = complete_codex_json_run(run_id, output_text)
         run_finished = True
         return output_json
+    except CodexCliError as exc:
+        output_text = exc.output_text
+        finish_codex_run(run_id, "error", output_text, error=str(exc))
+        run_finished = True
+        raise
     except subprocess.TimeoutExpired as exc:
         if not run_finished:
             finish_codex_run(run_id, "timeout", output_text, error=str(exc))
@@ -518,11 +561,6 @@ def run_codex_json(session_id: int, role: str, prompt_snapshot: str) -> Any:
         if not run_finished:
             finish_codex_run(run_id, "error", output_text, error=str(exc))
         raise
-    finally:
-        try:
-            output_path.unlink(missing_ok=True)
-        except OSError:
-            pass
 
 
 def today_label() -> str:
@@ -588,29 +626,25 @@ def render_final_text(formatted: dict[str, Any]) -> str:
 
 def build_progress_workflow_prompt(
     raw_input: str,
-    previous_questions: list[dict[str, str]],
     prompts: dict[str, str],
 ) -> str:
     return f"""
-你是本機週報整理流程的整合處理器。請一次完成格式化、品質評分、問題狀態檢視與追問產生，並只回傳 JSON。
+你是本機週報整理流程的整合處理器。請一次完成格式化、品質評分與追問產生，並只回傳 JSON。
 
 請依序套用下列規則，但最後只輸出一個 JSON 物件。
 
 ## 格式化規則
 
-{prompts["format_progress"]}
+{prompts["formatted"]}
 
 ## 品質評分規則
 
-{prompts["quality_score"]}
+{prompts["evaluation"]}
 
-## 問題追問與狀態判斷規則
+## 問題追問方式
 
-{prompts["question_generation"]}
+{prompts["question_result"]}
 
-## 內容顆粒度規範
-
-{prompts["granularity_guidance"]}
 
 ## 輸出格式
 
@@ -630,33 +664,24 @@ def build_progress_workflow_prompt(
   "evaluation": {{
     "score": 0,
     "subscores": [
-      {{"name": "背景", "score": 0, "max_score": 15}},
-      {{"name": "目前狀態", "score": 0, "max_score": 30}},
-      {{"name": "下週計畫", "score": 0, "max_score": 20}},
-      {{"name": "健康度", "score": 0, "max_score": 20}},
-      {{"name": "風險 / Tag", "score": 0, "max_score": 15}}
+      {{"name": "完整度", "score": 0, "max_score": 10}},
+      {{"name": "顆粒度", "score": 0, "max_score": 20}},
+      {{"name": "量化與風險", "score": 0, "max_score": 30}},
+      {{"name": "解釋性", "score": 0, "max_score": 20}},
+      {{"name": "影響力與延展", "score": 0, "max_score": 20}}
     ],
     "missing_fields": [],
     "strengths": [],
     "ready_for_review": false
   }},
   "question_result": {{
-    "question_reviews": [
-      {{
-        "previous_question_id": "1",
-        "status": "resolved",
-        "reason": ""
-      }}
-    ],
     "questions": [
       {{
         "id": "q1",
-        "status": "unresolved",
         "target_field": "this_week_progress",
         "question": "",
-        "reason": "",
-        "priority": "high",
-        "previous_question_id": ""
+        "example": "",
+        "priority": "high"
       }}
     ]
   }}
@@ -666,9 +691,6 @@ def build_progress_workflow_prompt(
 
 {raw_input}
 
-## 上一輪問題清單
-
-{json.dumps(previous_questions, ensure_ascii=False, indent=2)}
 """.strip()
 
 
@@ -721,55 +743,30 @@ def validate_evaluation_json(value: Any) -> dict[str, Any]:
     }
 
 
-def normalize_question_status(status: Any) -> str:
-    clean_status = str(status or "unresolved").strip()
-    return clean_status if clean_status in QUESTION_STATUSES else "unresolved"
-
-
 def validate_questions_json(value: Any) -> dict[str, list[dict[str, str]]]:
     if not isinstance(value, dict):
         raise ValueError("question output must be an object")
-    raw_reviews = value.get("question_reviews", [])
-    if not isinstance(raw_reviews, list):
-        raw_reviews = []
-    question_reviews = []
-    for item in raw_reviews:
-        if not isinstance(item, dict):
-            continue
-        previous_question_id = str(item.get("previous_question_id", "")).strip()
-        if not previous_question_id:
-            continue
-        question_reviews.append(
-            {
-                "previous_question_id": previous_question_id,
-                "status": normalize_question_status(item.get("status")),
-                "reason": str(item.get("reason", "")).strip(),
-            }
-        )
-
     raw_questions = value.get("questions", [])
     if not isinstance(raw_questions, list):
         raise ValueError("questions must be a list")
     questions = []
-    for index, item in enumerate(raw_questions[:3], start=1):
+    for index, item in enumerate(raw_questions[:5], start=1):
         if not isinstance(item, dict):
             continue
         target_field = str(item.get("target_field", "notes"))
         if target_field not in {"project_name", "this_week_progress", "next_week_plan", "notes"}:
             target_field = "notes"
+        example = str(item.get("example", item.get("reason", ""))).strip()
         questions.append(
             {
                 "id": str(item.get("id") or f"q{index}"),
-                "status": "unresolved",
                 "target_field": target_field,
                 "question": str(item.get("question", "")).strip(),
-                "reason": str(item.get("reason", "")).strip(),
+                "reason": example,
                 "priority": str(item.get("priority", "medium")).strip() or "medium",
-                "previous_question_id": str(item.get("previous_question_id", "")).strip(),
             }
         )
     return {
-        "question_reviews": question_reviews,
         "questions": [question for question in questions if question["question"]],
     }
 
@@ -788,15 +785,15 @@ def validate_progress_workflow_json(
 def refine_progress_with_codex(
     session_id: int,
     raw_input: str,
-    previous_questions: list[dict[str, str]],
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, list[dict[str, str]]], str]:
     prompts = load_prompts()
+    spec = prepare_codex_run(
+        session_id,
+        "progress_workflow",
+        build_progress_workflow_prompt(raw_input, prompts),
+    )
     formatted, evaluation, question_result = validate_progress_workflow_json(
-        run_codex_json(
-            session_id,
-            "progress_workflow",
-            build_progress_workflow_prompt(raw_input, previous_questions, prompts),
-        )
+        run_codex_json(spec.session_id, spec.role, spec.prompt_snapshot)
     )
     final_text = render_final_text(formatted)
     return formatted, evaluation, question_result, final_text
@@ -805,9 +802,8 @@ def refine_progress_with_codex(
 def refine_progress(
     raw_input: str,
     session_id: int,
-    previous_questions: list[dict[str, str]],
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, list[dict[str, str]]], str]:
-    return refine_progress_with_codex(session_id, raw_input, previous_questions)
+    return refine_progress_with_codex(session_id, raw_input)
 
 
 def save_refinement(
@@ -840,28 +836,14 @@ def save_refinement(
         ),
     )
     entry_id = cursor.lastrowid
-    for review in question_result["question_reviews"]:
-        conn.execute(
-            """
-            UPDATE questions
-            SET status = ?, review_reason = ?
-            WHERE id = ? AND session_id = ?
-            """,
-            (
-                review["status"],
-                review["reason"],
-                review["previous_question_id"],
-                session_id,
-            ),
-        )
     for question in questions:
         conn.execute(
             """
             INSERT INTO questions (
                 session_id, entry_id, question, reason, priority,
-                target_field, status, review_reason, previous_question_id, created_at
+                target_field, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session_id,
@@ -870,9 +852,6 @@ def save_refinement(
                 question["reason"],
                 question["priority"],
                 question["target_field"],
-                question["status"],
-                "",
-                question["previous_question_id"],
                 now,
             ),
         )
@@ -886,6 +865,131 @@ def save_refinement(
         (next_state, final_text, now, session_id),
     )
     return entry_id
+
+
+def prepare_progress_check(task_id: str, progress_text: str) -> dict[str, Any]:
+    if not has_clickup_config():
+        raise ValueError("尚未設定 ClickUp 連線。")
+    with get_db() as conn:
+        project = get_clickup_project(conn, task_id)
+        session_id = get_session(conn)["id"]
+        if project is None:
+            set_session_error(conn, session_id, "找不到選擇的 ClickUp 專案，請重新同步或重新選擇。")
+            raise ValueError("找不到選擇的 ClickUp 專案，請重新同步或重新選擇。")
+        project_name = project["name"]
+
+    raw_input = build_progress_input(project_name, progress_text)
+    if not raw_input:
+        raise ValueError("請輸入進度內容。")
+
+    spec = prepare_codex_run(
+        session_id,
+        "progress_workflow",
+        build_progress_workflow_prompt(raw_input, load_prompts()),
+    )
+    run_id = create_codex_run(spec.session_id, spec.role, spec.prompt_snapshot)
+    return {
+        "ok": True,
+        "run_id": run_id,
+        "session_id": spec.session_id,
+        "role": spec.role,
+        "raw_input": raw_input,
+        "prompt_snapshot": spec.prompt_snapshot,
+    }
+
+
+def complete_progress_check(run_id: int, raw_input: str, output: Any) -> dict[str, Any]:
+    clean_input = raw_input.strip()
+    if not clean_input:
+        raise ValueError("raw_input is required")
+
+    output_text = output if isinstance(output, str) else json.dumps(output, ensure_ascii=False)
+    try:
+        output_json = extract_json_object(output_text) if isinstance(output, str) else output
+        formatted, evaluation, question_result = validate_progress_workflow_json(output_json)
+        final_text = render_final_text(formatted)
+    except Exception as exc:
+        finish_codex_run(run_id, "error", output_text, error=str(exc))
+        raise
+
+    with get_db() as conn:
+        run = get_codex_run(conn, run_id)
+        if run is None:
+            raise ValueError("codex run not found")
+        if run["role"] != "progress_workflow":
+            raise ValueError("codex run role does not match progress workflow")
+        session_id = run["session_id"]
+        entry_id = save_refinement(
+            conn,
+            session_id,
+            clean_input,
+            formatted,
+            evaluation,
+            question_result,
+            final_text,
+            utc_now(),
+        )
+    finish_codex_run(run_id, "success", output_text, output_json)
+
+    return {
+        "ok": True,
+        "entry_id": entry_id,
+        "run_id": run_id,
+        "raw_input": clean_input,
+        "formatted": formatted,
+        "evaluation": evaluation,
+        "question_result": question_result,
+        "final_text": final_text,
+    }
+
+
+def check_progress_update(task_id: str, progress_text: str) -> dict[str, Any]:
+    if not has_clickup_config():
+        raise ValueError("尚未設定 ClickUp 連線。")
+    with get_db() as conn:
+        project = get_clickup_project(conn, task_id)
+        session_id = get_session(conn)["id"]
+        if project is None:
+            set_session_error(conn, session_id, "找不到選擇的 ClickUp 專案，請重新同步或重新選擇。")
+            raise ValueError("找不到選擇的 ClickUp 專案，請重新同步或重新選擇。")
+        project_name = project["name"]
+
+    clean_text = build_progress_input(project_name, progress_text)
+    if not clean_text:
+        raise ValueError("請輸入進度內容。")
+
+    now = utc_now()
+    try:
+        formatted, evaluation, question_result, final_text = refine_progress(
+            clean_text,
+            session_id,
+        )
+    except Exception as exc:
+        with get_db() as conn:
+            set_session_error(conn, session_id, f"Codex workflow failed: {exc}")
+        raise
+
+    with get_db() as conn:
+        entry_id = save_refinement(
+            conn,
+            session_id,
+            clean_text,
+            formatted,
+            evaluation,
+            question_result,
+            final_text,
+            now,
+        )
+
+    return {
+        "ok": True,
+        "entry_id": entry_id,
+        "raw_input": clean_text,
+        "formatted": formatted,
+        "evaluation": evaluation,
+        "question_result": question_result,
+        "final_text": final_text,
+    }
 
 
 def parse_json_field(row: sqlite3.Row | None, field: str, default: Any) -> Any:
@@ -970,7 +1074,7 @@ def build_codex_direct_evaluation() -> dict[str, Any]:
 
 
 def build_empty_question_result() -> dict[str, list[dict[str, str]]]:
-    return {"question_reviews": [], "questions": []}
+    return {"questions": []}
 
 
 def serialize_latest_progress(conn: sqlite3.Connection) -> dict[str, Any]:
@@ -1031,22 +1135,8 @@ def save_login(
     clean_token = clickup_token.strip()
     clean_list_id = clickup_list_id.strip()
     clean_codex_bin = codex_bin.strip()
-    if not clean_token or not clean_list_id:
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "clickup_token": clean_token,
-                "clickup_list_id": clean_list_id,
-                "codex_bin": clean_codex_bin,
-                "error": "請輸入 CLICKUP_TOKEN 與 CLICKUP_LIST_ID。",
-                "project_count": None,
-            },
-            status_code=400,
-        )
-
     try:
-        projects = fetch_clickup_projects(clean_token, clean_list_id)
+        connect_clickup(clean_token, clean_list_id, clean_codex_bin)
     except Exception as exc:
         return templates.TemplateResponse(
             "login.html",
@@ -1061,10 +1151,7 @@ def save_login(
             status_code=400,
         )
 
-    save_clickup_config(clean_token, clean_list_id, clean_codex_bin)
     clickup_session_active = True
-    with get_db() as conn:
-        save_clickup_projects(conn, projects)
     return RedirectResponse("/", status_code=303)
 
 
@@ -1138,6 +1225,37 @@ def codex_progress_current():
         return serialize_latest_progress(conn)
 
 
+@app.post("/codex/clickup/connect")
+async def codex_clickup_connect(request: Request):
+    global clickup_session_active
+    payload: dict[str, Any] = {}
+    body = await request.body()
+    if body:
+        try:
+            raw_payload = json.loads(body)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail="Request body must be valid JSON") from exc
+        if not isinstance(raw_payload, dict):
+            raise HTTPException(status_code=400, detail="Request body must be a JSON object")
+        payload = raw_payload
+
+    token = str(payload.get("clickup_token") or get_clickup_token()).strip()
+    list_id = str(payload.get("clickup_list_id") or get_clickup_list_id()).strip()
+    codex_bin = str(payload.get("codex_bin") or os.environ.get("CODEX_BIN", "")).strip()
+    try:
+        project_count = connect_clickup(token, list_id, codex_bin)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"ClickUp 連線失敗：{exc}") from exc
+
+    clickup_session_active = True
+    return {
+        "ok": True,
+        "message": "ClickUp 連線成功，已同步專案清單。",
+        "project_count": project_count,
+        "clickup_list_id": list_id,
+    }
+
+
 @app.post("/codex/progress/update")
 async def codex_progress_update(request: Request):
     try:
@@ -1189,37 +1307,94 @@ def submit_progress(
 ):
     if not has_clickup_config():
         return RedirectResponse("/login", status_code=303)
-    with get_db() as conn:
-        project = get_clickup_project(conn, task_id)
-        if project is None:
-            session_id = get_session(conn)["id"]
-            set_session_error(conn, session_id, "找不到選擇的 ClickUp 專案，請重新同步或重新選擇。")
-            return RedirectResponse("/", status_code=303)
-        project_name = project["name"]
-    clean_text = build_progress_input(project_name, progress_text)
-    if not clean_text:
-        return RedirectResponse("/", status_code=303)
-
-    now = utc_now()
-    with get_db() as conn:
-        session_id = get_session(conn)["id"]
-        previous_questions = serialize_previous_questions(get_latest_questions_for_session(conn, session_id))
-
     try:
-        formatted, evaluation, question_result, final_text = refine_progress(
-            clean_text,
-            session_id,
-            previous_questions,
-        )
-    except Exception as exc:
-        with get_db() as conn:
-            set_session_error(conn, session_id, f"Codex workflow failed: {exc}")
+        check_progress_update(task_id, progress_text)
+    except Exception:
         return RedirectResponse("/", status_code=303)
-
-    with get_db() as conn:
-        save_refinement(conn, session_id, clean_text, formatted, evaluation, question_result, final_text, now)
 
     return RedirectResponse("/", status_code=303)
+
+
+@app.post("/api/progress/check")
+async def api_progress_check(request: Request):
+    if not has_clickup_config():
+        raise HTTPException(status_code=401, detail="尚未設定 ClickUp 連線。")
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Request body must be valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Request body must be a JSON object")
+
+    task_id = str(payload.get("task_id", "")).strip()
+    progress_text = str(payload.get("progress_text", "")).strip()
+    if not task_id:
+        raise HTTPException(status_code=400, detail="task_id is required")
+    if not progress_text:
+        raise HTTPException(status_code=400, detail="progress_text is required")
+
+    try:
+        return check_progress_update(task_id, progress_text)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Codex workflow failed: {exc}") from exc
+
+
+@app.post("/api/progress/check/prepare")
+async def api_progress_check_prepare(request: Request):
+    if not has_clickup_config():
+        raise HTTPException(status_code=401, detail="尚未設定 ClickUp 連線。")
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Request body must be valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Request body must be a JSON object")
+
+    task_id = str(payload.get("task_id", "")).strip()
+    progress_text = str(payload.get("progress_text", "")).strip()
+    if not task_id:
+        raise HTTPException(status_code=400, detail="task_id is required")
+    if not progress_text:
+        raise HTTPException(status_code=400, detail="progress_text is required")
+
+    try:
+        return prepare_progress_check(task_id, progress_text)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/progress/check/complete")
+async def api_progress_check_complete(request: Request):
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Request body must be valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Request body must be a JSON object")
+
+    raw_run_id = payload.get("run_id")
+    try:
+        run_id = int(raw_run_id)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="run_id is required") from exc
+    raw_input = str(payload.get("raw_input", "")).strip()
+    if not raw_input:
+        raise HTTPException(status_code=400, detail="raw_input is required")
+    if "output" in payload:
+        output = payload["output"]
+    elif "output_text" in payload:
+        output = str(payload["output_text"])
+    else:
+        raise HTTPException(status_code=400, detail="output or output_text is required")
+
+    try:
+        return complete_progress_check(run_id, raw_input, output)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Codex workflow failed: {exc}") from exc
 
 
 @app.post("/draft")
@@ -1243,13 +1418,11 @@ def refine_draft(
     now = utc_now()
     with get_db() as conn:
         session_id = get_session(conn)["id"]
-        previous_questions = serialize_previous_questions(get_latest_questions_for_session(conn, session_id))
 
     try:
         formatted, evaluation, question_result, final_text = refine_progress(
             clean_text,
             session_id,
-            previous_questions,
         )
     except Exception as exc:
         with get_db() as conn:
