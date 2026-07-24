@@ -241,6 +241,33 @@ def save_refinement(
     return entry_id
 
 
+def keep_only_latest_progress(
+    conn: sqlite3.Connection,
+    session_id: int,
+    entry_id: int,
+    run_id: int | None = None,
+) -> None:
+    conn.execute(
+        "DELETE FROM questions WHERE session_id = ? AND entry_id != ?",
+        (session_id, entry_id),
+    )
+    conn.execute(
+        "DELETE FROM progress_entries WHERE session_id = ? AND id != ?",
+        (session_id, entry_id),
+    )
+    if run_id is None:
+        conn.execute("DELETE FROM codex_runs WHERE session_id = ?", (session_id,))
+    else:
+        conn.execute(
+            "DELETE FROM codex_runs WHERE session_id = ? AND id != ?",
+            (session_id, run_id),
+        )
+        conn.execute(
+            "UPDATE codex_runs SET entry_id = ? WHERE id = ?",
+            (entry_id, run_id),
+        )
+
+
 def parse_json_field(row: sqlite3.Row | None, field: str, default: Any) -> Any:
     if row is None:
         return default

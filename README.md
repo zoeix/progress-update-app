@@ -71,15 +71,7 @@ http://127.0.0.1:8000
 7. 依評分與待補充問題修改內容。
 8. 確認內容後點擊「上傳進度」。
 
-## Codex CLI 接口
-
-可以用 HTTP API 模擬登入頁的「確認連線」按鈕，服務會使用 `.env` 內的 `CLICKUP_TOKEN` 與 `CLICKUP_LIST_ID`，連到 ClickUp 並同步專案清單。
-
-```bash
-curl -sS -X POST http://127.0.0.1:8000/codex/clickup/connect
-```
-
-或使用專案腳本：
+## ClickUp 連線腳本
 
 ```bash
 .venv/bin/python scripts/connect_clickup.py
@@ -94,14 +86,6 @@ curl -sS -X POST http://127.0.0.1:8000/codex/clickup/connect
   "project_count": 0,
   "clickup_list_id": "..."
 }
-```
-
-也可以用 JSON body 覆蓋設定：
-
-```bash
-curl -sS -X POST http://127.0.0.1:8000/codex/clickup/connect \
-  -H "Content-Type: application/json" \
-  -d '{"clickup_token":"...","clickup_list_id":"...","codex_bin":""}'
 ```
 
 建議進度格式：

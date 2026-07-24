@@ -150,7 +150,7 @@ def complete_codex_json_run(run_id: int, output_text: str) -> Any:
     return output_json
 
 
-def run_codex_json(session_id: int, role: str, prompt_snapshot: str) -> Any:
+def run_codex_json_with_run_id(session_id: int, role: str, prompt_snapshot: str) -> tuple[Any, int]:
     spec = prepare_codex_run(session_id, role, prompt_snapshot)
     run_id = create_codex_run(spec.session_id, spec.role, spec.prompt_snapshot)
     output_text = ""
@@ -159,7 +159,7 @@ def run_codex_json(session_id: int, role: str, prompt_snapshot: str) -> Any:
         output_text = run_codex_cli(run_id, spec.role, spec.prompt_snapshot)
         output_json = complete_codex_json_run(run_id, output_text)
         run_finished = True
-        return output_json
+        return output_json, run_id
     except CodexCliError as exc:
         output_text = exc.output_text
         finish_codex_run(run_id, "error", output_text, error=str(exc))
@@ -173,3 +173,8 @@ def run_codex_json(session_id: int, role: str, prompt_snapshot: str) -> Any:
         if not run_finished:
             finish_codex_run(run_id, "error", output_text, error=str(exc))
         raise
+
+
+def run_codex_json(session_id: int, role: str, prompt_snapshot: str) -> Any:
+    output_json, _run_id = run_codex_json_with_run_id(session_id, role, prompt_snapshot)
+    return output_json

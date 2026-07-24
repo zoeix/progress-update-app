@@ -211,11 +211,6 @@
         border-color: var(--accent-hover);
       }
 
-      button:disabled {
-        cursor: wait;
-        opacity: 0.72;
-      }
-
       .secondary-button {
         border: 1px solid var(--line);
         background: var(--panel);
@@ -225,6 +220,16 @@
       .secondary-button:hover:not(:disabled) {
         background: #f9fafb;
         border-color: #c8ced8;
+      }
+
+      button:disabled,
+      .secondary-button:disabled,
+      body.is-busy button {
+        cursor: wait;
+        background: #98a2b3;
+        border-color: #98a2b3;
+        color: #fff;
+        opacity: 1;
       }
 
       .button-row {
@@ -246,6 +251,30 @@
 
       form.is-submitting .submit-status {
         display: block;
+      }
+
+      .page-lock {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(246, 247, 249, 0.72);
+      }
+
+      body.is-busy .page-lock {
+        display: flex;
+      }
+
+      .page-lock-message {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        padding: 12px 16px;
+        color: var(--text);
+        font-weight: 650;
+        box-shadow: 0 8px 24px rgba(16, 24, 40, 0.12);
       }
 
       .score {
@@ -497,36 +526,16 @@
         </section>
       </div>
     </main>
+    <div class="page-lock" aria-live="polite" aria-hidden="true">
+      <div class="page-lock-message">處理中...</div>
+    </div>
     <script>
-      const latestEntryId = {{ entry["id"] if entry else "null" }};
-
-      const hasActiveDraftEdit = () => {
-        const active = document.activeElement;
-        return active && active.classList && active.classList.contains("draft-field");
-      };
-
-      const refreshIfCodexUpdated = async () => {
-        if (document.querySelector("form.is-submitting") || hasActiveDraftEdit()) {
-          return;
-        }
-        try {
-          const response = await fetch("/codex/progress/current", { cache: "no-store" });
-          if (!response.ok) {
-            return;
-          }
-          const progress = await response.json();
-          if (progress.entry_id && progress.entry_id !== latestEntryId) {
-            window.location.reload();
-          }
-        } catch (error) {
-          // Ignore transient polling errors; the next interval can recover.
-        }
-      };
-
-      window.setInterval(refreshIfCodexUpdated, 2000);
-
       document.querySelectorAll("form").forEach((form) => {
         form.addEventListener("submit", (event) => {
+          if (form.dataset.submitting === "true") {
+            return;
+          }
+
           const message = form.dataset.confirm;
           if (message && !window.confirm(message)) {
             event.preventDefault();
@@ -538,20 +547,40 @@
             event.preventDefault();
             return;
           }
+
+          event.preventDefault();
+          form.dataset.submitting = "true";
           form.classList.add("is-submitting");
+          document.body.classList.add("is-busy");
           const status = form.querySelector(".submit-status");
+          let statusText = "";
           if (status && submitAction.endsWith("/upload")) {
-            status.textContent = "正在上傳進度到 ClickUp，請稍候...";
+            statusText = "正在上傳進度到 ClickUp，請稍候...";
           } else if (status && submitAction.endsWith("/finish")) {
-            status.textContent = "正在重設進度並結束服務，請稍候...";
+            statusText = "正在重設進度並結束服務，請稍候...";
           } else if (status) {
-            status.textContent = {{ '"已寫入 bridge/prompt.md，正在等待 bridge/res.json..."' if vscode_mode else '"正在檢查進度，請稍候..."' }};
+            statusText = {{ ("已寫入 bridge/prompt.md，正在等待 bridge/res.json..." if vscode_mode else "正在檢查進度，請稍候...") | tojson }};
           }
-          form.querySelectorAll("button").forEach((button) => {
+          if (status) {
+            status.textContent = statusText;
+          }
+          const lockMessage = document.querySelector(".page-lock-message");
+          if (lockMessage && statusText) {
+            lockMessage.textContent = statusText;
+          }
+          document.querySelectorAll("button").forEach((button) => {
             button.disabled = true;
-            button.dataset.originalText = button.textContent;
-            button.textContent = "處理中...";
+            if (form.contains(button)) {
+              button.dataset.originalText = button.textContent;
+              button.textContent = "處理中...";
+            }
           });
+          if (submitAction) {
+            form.setAttribute("action", submitAction);
+          }
+          window.setTimeout(() => {
+            HTMLFormElement.prototype.submit.call(form);
+          }, 150);
         });
       });
     </script>

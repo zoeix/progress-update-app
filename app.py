@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import json
 import os
 import threading
-from typing import Any
 
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -21,7 +19,7 @@ from tools.clickup import (
     post_clickup_comment,
     set_clickup_session_active,
 )
-from tools.config import BASE_DIR, utc_now
+from tools.config import BASE_DIR
 from tools.db import (
     get_db,
     get_latest_entry,
@@ -30,27 +28,17 @@ from tools.db import (
     init_db,
     parse_json_field,
     reset_progress_data,
-    save_refinement,
-    serialize_latest_progress,
     set_session_error,
     set_session_notice,
 )
 from tools.formatting import (
     build_clickup_upload_content,
     build_draft_form_state,
-    build_progress_input,
-    render_final_text,
     today_label,
 )
 from tools.progress import (
-    build_codex_direct_evaluation,
-    build_empty_question_result,
     check_progress_update,
     check_progress_update_with_bridge,
-    complete_progress_check,
-    prepare_progress_check,
-    refine_progress,
-    validate_formatted_json,
 )
 
 
@@ -180,86 +168,6 @@ def finish_progress():
     )
 
 
-@app.get("/codex/progress/current")
-def codex_progress_current():
-    with get_db() as conn:
-        return serialize_latest_progress(conn)
-
-
-@app.post("/codex/clickup/connect")
-async def codex_clickup_connect(request: Request):
-    payload: dict[str, Any] = {}
-    body = await request.body()
-    if body:
-        try:
-            raw_payload = json.loads(body)
-        except json.JSONDecodeError as exc:
-            raise HTTPException(status_code=400, detail="Request body must be valid JSON") from exc
-        if not isinstance(raw_payload, dict):
-            raise HTTPException(status_code=400, detail="Request body must be a JSON object")
-        payload = raw_payload
-
-    token = str(payload.get("clickup_token") or get_clickup_token()).strip()
-    list_id = str(payload.get("clickup_list_id") or get_clickup_list_id()).strip()
-    codex_bin = str(payload.get("codex_bin") or os.environ.get("CODEX_BIN", "")).strip()
-    try:
-        project_count = connect_clickup(token, list_id, codex_bin)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"ClickUp 連線失敗：{exc}") from exc
-
-    set_clickup_session_active(True)
-    return {
-        "ok": True,
-        "message": "ClickUp 連線成功，已同步專案清單。",
-        "project_count": project_count,
-        "clickup_list_id": list_id,
-    }
-
-
-@app.post("/codex/progress/update")
-async def codex_progress_update(request: Request):
-    try:
-        payload = await request.json()
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=400, detail="Request body must be valid JSON") from exc
-
-    if not isinstance(payload, dict):
-        raise HTTPException(status_code=400, detail="Request body must be a JSON object")
-
-    raw_formatted = payload.get("formatted", payload)
-    try:
-        formatted = validate_formatted_json(raw_formatted)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    final_text = render_final_text(formatted)
-    raw_input = str(payload.get("raw_input", "")).strip() or final_text
-    now = utc_now()
-    evaluation = build_codex_direct_evaluation()
-    question_result = build_empty_question_result()
-
-    with get_db() as conn:
-        session_id = get_session(conn)["id"]
-        entry_id = save_refinement(
-            conn,
-            session_id,
-            raw_input,
-            formatted,
-            evaluation,
-            question_result,
-            final_text,
-            now,
-        )
-        set_session_notice(conn, session_id, "已由 VSCode Codex 更新進度。")
-
-    return {
-        "ok": True,
-        "entry_id": entry_id,
-        "final_text": final_text,
-        "formatted": formatted,
-    }
-
-
 @app.post("/progress")
 def submit_progress(
     task_id: str = Form(...),
@@ -274,126 +182,6 @@ def submit_progress(
             check_progress_update(task_id, progress_text)
     except Exception:
         return RedirectResponse("/", status_code=303)
-
-    return RedirectResponse("/", status_code=303)
-
-
-@app.post("/api/progress/check")
-async def api_progress_check(request: Request):
-    if not has_clickup_config():
-        raise HTTPException(status_code=401, detail="尚未設定 ClickUp 連線。")
-    try:
-        payload = await request.json()
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=400, detail="Request body must be valid JSON") from exc
-    if not isinstance(payload, dict):
-        raise HTTPException(status_code=400, detail="Request body must be a JSON object")
-
-    task_id = str(payload.get("task_id", "")).strip()
-    progress_text = str(payload.get("progress_text", "")).strip()
-    if not task_id:
-        raise HTTPException(status_code=400, detail="task_id is required")
-    if not progress_text:
-        raise HTTPException(status_code=400, detail="progress_text is required")
-
-    try:
-        return check_progress_update(task_id, progress_text)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Codex workflow failed: {exc}") from exc
-
-
-@app.post("/api/progress/check/prepare")
-async def api_progress_check_prepare(request: Request):
-    if not has_clickup_config():
-        raise HTTPException(status_code=401, detail="尚未設定 ClickUp 連線。")
-    try:
-        payload = await request.json()
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=400, detail="Request body must be valid JSON") from exc
-    if not isinstance(payload, dict):
-        raise HTTPException(status_code=400, detail="Request body must be a JSON object")
-
-    task_id = str(payload.get("task_id", "")).strip()
-    progress_text = str(payload.get("progress_text", "")).strip()
-    if not task_id:
-        raise HTTPException(status_code=400, detail="task_id is required")
-    if not progress_text:
-        raise HTTPException(status_code=400, detail="progress_text is required")
-
-    try:
-        return prepare_progress_check(task_id, progress_text)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/api/progress/check/complete")
-async def api_progress_check_complete(request: Request):
-    try:
-        payload = await request.json()
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=400, detail="Request body must be valid JSON") from exc
-    if not isinstance(payload, dict):
-        raise HTTPException(status_code=400, detail="Request body must be a JSON object")
-
-    raw_run_id = payload.get("run_id")
-    try:
-        run_id = int(raw_run_id)
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail="run_id is required") from exc
-    raw_input = str(payload.get("raw_input", "")).strip()
-    if not raw_input:
-        raise HTTPException(status_code=400, detail="raw_input is required")
-    if "output" in payload:
-        output = payload["output"]
-    elif "output_text" in payload:
-        output = str(payload["output_text"])
-    else:
-        raise HTTPException(status_code=400, detail="output or output_text is required")
-
-    try:
-        return complete_progress_check(run_id, raw_input, output)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Codex workflow failed: {exc}") from exc
-
-
-@app.post("/draft")
-def refine_draft(
-    task_id: str = Form(...),
-    progress_text: str = Form(...),
-):
-    if not has_clickup_config():
-        return RedirectResponse("/login", status_code=303)
-    with get_db() as conn:
-        project = get_clickup_project(conn, task_id)
-        if project is None:
-            session_id = get_session(conn)["id"]
-            set_session_error(conn, session_id, "找不到選擇的 ClickUp 專案，請重新同步或重新選擇。")
-            return RedirectResponse("/", status_code=303)
-        project_name = project["name"]
-    clean_text = build_progress_input(project_name, progress_text)
-    if not clean_text:
-        return RedirectResponse("/", status_code=303)
-
-    now = utc_now()
-    with get_db() as conn:
-        session_id = get_session(conn)["id"]
-
-    try:
-        formatted, evaluation, question_result, final_text = refine_progress(
-            clean_text,
-            session_id,
-        )
-    except Exception as exc:
-        with get_db() as conn:
-            set_session_error(conn, session_id, f"Codex workflow failed: {exc}")
-        return RedirectResponse("/", status_code=303)
-
-    with get_db() as conn:
-        save_refinement(conn, session_id, clean_text, formatted, evaluation, question_result, final_text, now)
 
     return RedirectResponse("/", status_code=303)
 

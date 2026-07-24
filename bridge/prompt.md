@@ -225,4 +225,4 @@
 ## 使用者週報草稿
 
 專案名稱: Customer Onboarding Portal Enhancement
-和需求單位討論報表需求 下週開始開發
+討論

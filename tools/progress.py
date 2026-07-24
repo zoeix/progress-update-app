@@ -11,10 +11,10 @@ from tools.codex import (
     finish_codex_run,
     get_codex_run,
     prepare_codex_run,
-    run_codex_json,
+    run_codex_json_with_run_id,
 )
 from tools.config import BASE_DIR, PROMPT_FILES, PROMPTS_DIR, utc_now
-from tools.db import get_db, get_session, save_refinement, set_session_error
+from tools.db import get_db, get_session, keep_only_latest_progress, save_refinement, set_session_error
 from tools.formatting import build_progress_input, normalize_items, render_final_text, today_label
 
 BRIDGE_DIR = BASE_DIR / "bridge"
@@ -193,24 +193,29 @@ def validate_progress_workflow_json(
 def refine_progress_with_codex(
     session_id: int,
     raw_input: str,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, list[dict[str, str]]], str]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, list[dict[str, str]]], str, int]:
     prompts = load_prompts()
     spec = prepare_codex_run(
         session_id,
         "progress_workflow",
         build_progress_workflow_prompt(raw_input, prompts),
     )
+    output_json, run_id = run_codex_json_with_run_id(
+        spec.session_id,
+        spec.role,
+        spec.prompt_snapshot,
+    )
     formatted, evaluation, question_result = validate_progress_workflow_json(
-        run_codex_json(spec.session_id, spec.role, spec.prompt_snapshot)
+        output_json
     )
     final_text = render_final_text(formatted)
-    return formatted, evaluation, question_result, final_text
+    return formatted, evaluation, question_result, final_text, run_id
 
 
 def refine_progress(
     raw_input: str,
     session_id: int,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, list[dict[str, str]]], str]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, list[dict[str, str]]], str, int]:
     return refine_progress_with_codex(session_id, raw_input)
 
 
@@ -276,6 +281,7 @@ def complete_progress_check(run_id: int, raw_input: str, output: Any) -> dict[st
             final_text,
             utc_now(),
         )
+        keep_only_latest_progress(conn, session_id, entry_id, run_id)
     finish_codex_run(run_id, "success", output_text, output_json)
 
     return {
@@ -328,7 +334,9 @@ def check_progress_update_with_bridge(task_id: str, progress_text: str) -> dict[
         finish_codex_run(run_id, "error", error=str(exc))
         raise
 
-    return complete_progress_check(run_id, raw_input, output_text)
+    result = complete_progress_check(run_id, raw_input, output_text)
+    BRIDGE_RESPONSE_PATH.unlink(missing_ok=True)
+    return result
 
 
 def check_progress_update(task_id: str, progress_text: str) -> dict[str, Any]:
@@ -348,7 +356,7 @@ def check_progress_update(task_id: str, progress_text: str) -> dict[str, Any]:
 
     now = utc_now()
     try:
-        formatted, evaluation, question_result, final_text = refine_progress(
+        formatted, evaluation, question_result, final_text, run_id = refine_progress(
             clean_text,
             session_id,
         )
@@ -368,6 +376,7 @@ def check_progress_update(task_id: str, progress_text: str) -> dict[str, Any]:
             final_text,
             now,
         )
+        keep_only_latest_progress(conn, session_id, entry_id, run_id)
 
     return {
         "ok": True,

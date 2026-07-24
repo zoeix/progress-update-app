@@ -68,22 +68,6 @@ def render_final_text(formatted: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def items_to_text(items: Any) -> str:
-    if not isinstance(items, list):
-        return ""
-    lines = []
-    for item in items:
-        if isinstance(item, dict):
-            tag = str(item.get("tag", "")).strip()
-            text = str(item.get("text", "")).strip()
-            line = f"{tag} {text}".strip()
-        else:
-            line = str(item).strip()
-        if line:
-            lines.append(line)
-    return "\n".join(lines)
-
-
 def build_progress_text(formatted: dict[str, Any]) -> str:
     this_week = normalize_items(formatted.get("this_week_progress", []))
     next_week = normalize_items(formatted.get("next_week_plan", []))
