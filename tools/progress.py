@@ -71,12 +71,17 @@ def build_progress_workflow_prompt(
   }},
   "evaluation": {{
     "score": 0,
+    "summary_sentences": [
+      "整體評分判斷。",
+      "主要優點。",
+      "最需要補強的地方。"
+    ],
     "subscores": [
       {{"name": "完整度", "score": 0, "max_score": 10}},
       {{"name": "顆粒度", "score": 0, "max_score": 20}},
-      {{"name": "量化與風險", "score": 0, "max_score": 30}},
+      {{"name": "支持度", "score": 0, "max_score": 30}},
       {{"name": "解釋性", "score": 0, "max_score": 20}},
-      {{"name": "影響力與延展", "score": 0, "max_score": 20}}
+      {{"name": "計劃性", "score": 0, "max_score": 20}}
     ],
     "missing_fields": [],
     "strengths": [],
@@ -86,6 +91,8 @@ def build_progress_workflow_prompt(
     "questions": [
       {{
         "id": "q1",
+        "type": "question",
+        "tag": "完整度",
         "target_field": "this_week_progress",
         "question": "",
         "example": "",
@@ -123,6 +130,7 @@ def validate_evaluation_json(value: Any) -> dict[str, Any]:
         score = int(score) if str(score).isdigit() else 0
     missing_fields = value.get("missing_fields", [])
     strengths = value.get("strengths", [])
+    summary_sentences = value.get("summary_sentences", [])
     raw_subscores = value.get("subscores", [])
     subscores = []
     if isinstance(raw_subscores, list):
@@ -144,6 +152,10 @@ def validate_evaluation_json(value: Any) -> dict[str, Any]:
             )
     return {
         "score": max(0, min(100, score)),
+        "summary_sentences": [
+            str(item).strip() for item in summary_sentences[:3]
+            if str(item).strip()
+        ] if isinstance(summary_sentences, list) else [],
         "subscores": [item for item in subscores if item["name"]],
         "missing_fields": missing_fields if isinstance(missing_fields, list) else [],
         "strengths": strengths if isinstance(strengths, list) else [],
@@ -158,9 +170,16 @@ def validate_questions_json(value: Any) -> dict[str, list[dict[str, str]]]:
     if not isinstance(raw_questions, list):
         raise ValueError("questions must be a list")
     questions = []
+    valid_tags = {"完整度", "顆粒度", "支持度", "解釋性", "計劃性"}
     for index, item in enumerate(raw_questions[:5], start=1):
         if not isinstance(item, dict):
             continue
+        item_type = str(item.get("type", "question")).strip()
+        if item_type not in {"question", "suggestion"}:
+            item_type = "question"
+        tag = str(item.get("tag", "")).strip()
+        if tag not in valid_tags:
+            tag = "完整度"
         target_field = str(item.get("target_field", "notes"))
         if target_field not in {"project_name", "this_week_progress", "next_week_plan", "notes"}:
             target_field = "notes"
@@ -168,6 +187,8 @@ def validate_questions_json(value: Any) -> dict[str, list[dict[str, str]]]:
         questions.append(
             {
                 "id": str(item.get("id") or f"q{index}"),
+                "type": item_type,
+                "tag": tag,
                 "target_field": target_field,
                 "question": str(item.get("question", "")).strip(),
                 "reason": example,
@@ -392,6 +413,11 @@ def check_progress_update(task_id: str, progress_text: str) -> dict[str, Any]:
 def build_codex_direct_evaluation() -> dict[str, Any]:
     return {
         "score": 100,
+        "summary_sentences": [
+            "整體內容已由 VSCode Codex 依進度格式直接整理完成。",
+            "主要優點是格式明確，已可作為進度更新使用。",
+            "若需要更完整的評分，仍可補充數字、風險與後續安排。",
+        ],
         "subscores": [],
         "missing_fields": [],
         "strengths": ["由 VSCode Codex 依進度格式規則直接更新。"],

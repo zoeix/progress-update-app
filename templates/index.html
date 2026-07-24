@@ -242,6 +242,38 @@
         margin: 0;
       }
 
+      .field-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 6px;
+      }
+
+      .field-heading label {
+        margin-bottom: 0;
+      }
+
+      .load-actions {
+        display: inline-flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .small-button {
+        margin-top: 0;
+        padding: 4px 8px;
+        font-size: 12px;
+        line-height: 1.3;
+      }
+
+      .load-status {
+        min-width: 38px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
       .submit-status {
         display: none;
         margin-top: 10px;
@@ -295,10 +327,82 @@
         margin-bottom: 0;
       }
 
+      .score-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        position: relative;
+      }
+
+      .score-help {
+        width: 18px;
+        height: 18px;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background: #ffffff;
+        color: #475467;
+        cursor: help;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 750;
+        line-height: 1;
+        padding: 0;
+      }
+
+      .score-help:focus-visible {
+        outline: 2px solid #84c5f4;
+        outline-offset: 2px;
+      }
+
+      .score-tooltip {
+        position: absolute;
+        top: calc(100% + 10px);
+        left: 0;
+        z-index: 20;
+        width: min(360px, calc(100vw - 40px));
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #ffffff;
+        color: var(--text);
+        box-shadow: 0 12px 30px rgba(16, 24, 40, 0.16);
+        display: none;
+        padding: 12px;
+      }
+
+      .score-title:hover .score-tooltip,
+      .score-title:focus-within .score-tooltip {
+        display: block;
+      }
+
+      .score-tooltip p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .score-tooltip ul {
+        display: grid;
+        gap: 7px;
+        margin: 0;
+        padding-left: 18px;
+      }
+
+      .score-tooltip li {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
       .score strong {
         font-size: 32px;
         font-weight: 650;
         line-height: 1;
+      }
+
+      .score strong.is-fail {
+        color: var(--danger);
       }
 
       .subscores {
@@ -311,11 +415,12 @@
       .subscore {
         border-left: 1px solid var(--soft-line);
         padding-left: 10px;
+        position: relative;
       }
 
       .subscore strong {
         display: block;
-        font-size: 15px;
+        font-size: 14px;
         line-height: 1.2;
       }
 
@@ -324,22 +429,131 @@
         font-size: 13px;
       }
 
+      .subscore-status {
+        display: block;
+        margin-bottom: 3px;
+        color: #344054;
+        font-size: 15px;
+        font-weight: 650;
+        line-height: 1.2;
+      }
+
+      .subscore-status.is-weak {
+        color: var(--danger);
+      }
+
+      .subscore-detail {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .subscore-info {
+        width: 16px;
+        height: 16px;
+        margin-top: 0;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background: #ffffff;
+        color: #667085;
+        cursor: help;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        font-size: 11px;
+        font-weight: 750;
+        line-height: 1;
+      }
+
+      .subscore-info:focus-visible {
+        outline: 2px solid #84c5f4;
+        outline-offset: 2px;
+      }
+
+      .subscore-tooltip {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 10px;
+        z-index: 10;
+        min-width: 84px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #ffffff;
+        color: var(--text);
+        display: none;
+        padding: 6px 8px;
+        font-size: 13px;
+        font-weight: 650;
+        line-height: 1.2;
+        box-shadow: 0 10px 24px rgba(16, 24, 40, 0.14);
+        white-space: nowrap;
+      }
+
+      .subscore-info:hover + .subscore-tooltip,
+      .subscore-info:focus + .subscore-tooltip {
+        display: block;
+      }
+
+      .questions-list {
+        display: grid;
+        gap: 10px;
+      }
+
       .question {
-        padding: 12px 0;
-        border-top: 1px solid var(--soft-line);
+        border: 1px solid var(--soft-line);
+        border-radius: 8px;
+        background: #ffffff;
+        padding: 12px;
       }
 
-      .question:first-child {
-        border-top: 0;
-        padding-top: 0;
+      .question-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
       }
 
-      .priority {
+      .question-title {
+        min-width: 0;
+      }
+
+      .question-move {
+        flex: 0 0 auto;
+        width: 24px;
+        height: 24px;
+        margin-top: 0;
+        border-color: var(--line);
+        border-radius: 50%;
+        background: #ffffff;
+        color: #475467;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        font-size: 14px;
+        line-height: 1;
+      }
+
+      .question-move:hover:not(:disabled) {
+        background: #f9fafb;
+        border-color: #c8ced8;
+      }
+
+      .question-badge {
         display: inline-block;
         margin-left: 6px;
+        border: 1px solid var(--soft-line);
+        border-radius: 999px;
+        background: #f9fafb;
         color: #344054;
         font-size: 12px;
         font-weight: 650;
+        line-height: 1.2;
+        padding: 2px 7px;
+      }
+
+      .priority {
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         text-transform: uppercase;
       }
@@ -416,52 +630,58 @@
 
       <div class="grid">
         <aside class="panel score-panel">
-          <h2>內容評分</h2>
+          <h2 class="score-title">
+            內容評分
+            <button class="score-help" type="button" aria-label="查看內容評分說明">!</button>
+            <span class="score-tooltip" role="tooltip">
+              {% if evaluation.get("summary_sentences") %}
+                <ul>
+                  {% for sentence in evaluation["summary_sentences"] %}
+                    <li>{{ sentence }}</li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <p>尚未產生評分總結。</p>
+              {% endif %}
+            </span>
+          </h2>
           {% if entry %}
             <div class="score">
-              <strong>{{ evaluation["score"] }}</strong>
-              <span class="muted">/ 100</span>
+              {% set is_total_pass = evaluation["score"] > 80 %}
+              <strong{% if not is_total_pass %} class="is-fail"{% endif %}>
+                {{ "通過" if is_total_pass else "不通過" }}
+              </strong>
+              <span class="muted">{{ evaluation["score"] }} / 100</span>
             </div>
 
             {% if evaluation["subscores"] %}
               <div class="subscores">
                 {% for item in evaluation["subscores"] %}
                   <div class="subscore">
-                    <strong>{{ item["score"] }} / {{ item["max_score"] }}</strong>
-                    <span>
-                      {% if item["name"] == "完整度" %}
-                        完整度
-                      {% elif item["name"] == "顆粒度" %}
-                        顆粒度
-                      {% elif item["name"] == "量化與風險" %}
-                        量化風險
-                      {% elif item["name"] == "解釋性" %}
-                        解釋性
-                      {% elif item["name"] == "影響力與延展" %}
-                        影響延展
-                      {% elif item["name"] == "範圍清楚度" %}
-                        範圍
-                      {% elif item["name"] == "狀態具體度" %}
-                        狀態
-                      {% elif item["name"] == "成果可驗收性" %}
-                        成果
-                      {% elif item["name"] == "下一步可追蹤性" %}
-                        下一步
-                      {% elif item["name"] == "風險與依賴明確度" %}
-                        風險依賴
-                      {% elif item["name"] == "專案背景是否清楚" %}
-                        背景
-                      {% elif item["name"] == "本週進度是否足以判斷目前狀態" %}
-                        目前狀態
-                      {% elif item["name"] == "下週計畫是否可追蹤" %}
-                        下週計畫
-                      {% elif item["name"] == "專案健康度是否可判斷" %}
-                        健康度
-                      {% elif item["name"] == "Risk 與 Tag 是否足以支援管理決策" %}
-                        風險 / Tag
+                    {% set is_pass = item["max_score"] > 0 and item["score"] * 3 >= item["max_score"] * 2 %}
+                    <span class="subscore-status{% if not is_pass %} is-weak{% endif %}">
+                      {% if is_pass %}
+                        {% if item["name"] == "完整度" or item["name"] == "專案背景是否清楚" %}
+                          資訊完整
+                        {% elif item["name"] == "顆粒度" or item["name"] == "狀態具體度" or item["name"] == "本週進度是否足以判斷目前狀態" %}
+                          描述具體
+                        {% elif item["name"] == "支持度" or item["name"] == "量化與風險" or item["name"] == "風險與依賴明確度" or item["name"] == "Risk 與 Tag 是否足以支援管理決策" %}
+                          證據充分
+                        {% elif item["name"] == "解釋性" or item["name"] == "範圍清楚度" or item["name"] == "成果可驗收性" or item["name"] == "專案健康度是否可判斷" %}
+                          脈絡清楚
+                        {% elif item["name"] == "計劃性" or item["name"] == "影響力與延展" or item["name"] == "下一步可追蹤性" or item["name"] == "下週計畫是否可追蹤" %}
+                          後續可追蹤
+                        {% else %}
+                          {{ item["name"] }}
+                        {% endif %}
                       {% else %}
-                        {{ item["name"] }}
+                        待補強
                       {% endif %}
+                    </span>
+                    <span class="subscore-detail">
+                      <span>{{ item["name"] }}</span>
+                      <button class="subscore-info" type="button" aria-label="{{ item['name'] }} 分數">!</button>
+                      <span class="subscore-tooltip" role="tooltip">{{ item["score"] }} / {{ item["max_score"] }}</span>
                     </span>
                   </div>
                 {% endfor %}
@@ -492,7 +712,14 @@
             </div>
 
             <div class="form-row">
-              <label for="progress_text">進度內容</label>
+              <div class="field-heading">
+                <label for="progress_text">進度內容</label>
+                <div class="load-actions">
+                  <span class="load-status" aria-live="polite"></span>
+                  <button class="secondary-button small-button" type="button" data-load-progress="history">從歷史還原</button>
+                  <button class="secondary-button small-button" type="button" data-load-progress="tmp">從暫存還原</button>
+                </div>
+              </div>
               <textarea class="draft-field" id="progress_text" name="progress_text" placeholder="# 本週進度：&#10;1. [進度] 已完成...&#10;&#10;# 下週進度：&#10;1. [待確認] 預計..." required>{{ form_state["progress_text"] }}</textarea>
             </div>
 
@@ -508,15 +735,25 @@
           <h2>待補充</h2>
           {% if entry %}
             {% if questions %}
-              {% for item in questions %}
-                <div class="question">
-                  <strong>問題 {{ loop.index }}：{{ item["question"] }}</strong>
-                  <span class="priority">{{ item["priority"] }}</span>
-                  {% if item["reason"] %}
-                    <p class="muted">參考範例：{{ item["reason"] }}</p>
-                  {% endif %}
-                </div>
-              {% endfor %}
+              <div class="questions-list">
+                {% for item in questions %}
+                  <div class="question">
+                    <div class="question-top">
+                      <div class="question-title">
+                        <strong>問題 {{ loop.index }}：{{ item["question"] }}</strong>
+                        {% if item["tag"] %}
+                          <span class="question-badge">{{ item["tag"] }}</span>
+                        {% endif %}
+                        <span class="question-badge priority">{{ item["priority"] }}</span>
+                      </div>
+                      <button class="question-move" type="button" data-move-question-last aria-label="將此問題移到最後">↓</button>
+                    </div>
+                    {% if item["reason"] %}
+                      <p class="muted">參考範例：{{ item["reason"] }}</p>
+                    {% endif %}
+                  </div>
+                {% endfor %}
+              </div>
             {% else %}
               <p class="muted">無</p>
             {% endif %}
@@ -530,6 +767,53 @@
       <div class="page-lock-message">處理中...</div>
     </div>
     <script>
+      document.querySelectorAll("[data-load-progress]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const source = button.dataset.loadProgress;
+          const endpoint = source === "tmp" ? "/api/progress-content/tmp" : "/api/progress-content/latest";
+          const textarea = document.querySelector("#progress_text");
+          const projectSelect = document.querySelector("#project_name");
+          const status = button.closest(".load-actions")?.querySelector(".load-status");
+          if (status) {
+            status.textContent = "";
+          }
+          try {
+            const response = await fetch(endpoint, {headers: {"Accept": "application/json"}});
+            const payload = await response.json();
+            if (!payload.ok || !payload.progress_text) {
+              if (status) {
+                status.textContent = "無資料";
+              }
+              return;
+            }
+            if (textarea) {
+              textarea.value = payload.progress_text;
+              textarea.focus();
+            }
+            if (payload.task_id && projectSelect) {
+              projectSelect.value = payload.task_id;
+            }
+            if (status) {
+              status.textContent = "已載入";
+            }
+          } catch (_error) {
+            if (status) {
+              status.textContent = "無資料";
+            }
+          }
+        });
+      });
+
+      document.querySelectorAll("[data-move-question-last]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const question = button.closest(".question");
+          const list = button.closest(".questions-list");
+          if (question && list) {
+            list.appendChild(question);
+          }
+        });
+      });
+
       document.querySelectorAll("form").forEach((form) => {
         form.addEventListener("submit", (event) => {
           if (form.dataset.submitting === "true") {

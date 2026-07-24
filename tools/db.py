@@ -58,6 +58,8 @@ def init_db() -> None:
                 question TEXT NOT NULL,
                 reason TEXT NOT NULL,
                 priority TEXT NOT NULL,
+                type TEXT NOT NULL DEFAULT 'question',
+                tag TEXT NOT NULL DEFAULT '',
                 target_field TEXT NOT NULL DEFAULT 'notes',
                 status TEXT NOT NULL DEFAULT 'unresolved',
                 review_reason TEXT NOT NULL DEFAULT '',
@@ -100,6 +102,10 @@ def init_db() -> None:
         }
         if "target_field" not in question_columns:
             conn.execute("ALTER TABLE questions ADD COLUMN target_field TEXT NOT NULL DEFAULT 'notes'")
+        if "type" not in question_columns:
+            conn.execute("ALTER TABLE questions ADD COLUMN type TEXT NOT NULL DEFAULT 'question'")
+        if "tag" not in question_columns:
+            conn.execute("ALTER TABLE questions ADD COLUMN tag TEXT NOT NULL DEFAULT ''")
         if "status" not in question_columns:
             conn.execute("ALTER TABLE questions ADD COLUMN status TEXT NOT NULL DEFAULT 'unresolved'")
         if "review_reason" not in question_columns:
@@ -215,9 +221,9 @@ def save_refinement(
             """
             INSERT INTO questions (
                 session_id, entry_id, question, reason, priority,
-                target_field, created_at
+                type, tag, target_field, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session_id,
@@ -225,6 +231,8 @@ def save_refinement(
                 question["question"],
                 question["reason"],
                 question["priority"],
+                question["type"],
+                question["tag"],
                 question["target_field"],
                 now,
             ),
@@ -247,14 +255,6 @@ def keep_only_latest_progress(
     entry_id: int,
     run_id: int | None = None,
 ) -> None:
-    conn.execute(
-        "DELETE FROM questions WHERE session_id = ? AND entry_id != ?",
-        (session_id, entry_id),
-    )
-    conn.execute(
-        "DELETE FROM progress_entries WHERE session_id = ? AND id != ?",
-        (session_id, entry_id),
-    )
     if run_id is None:
         conn.execute("DELETE FROM codex_runs WHERE session_id = ?", (session_id,))
     else:
@@ -266,6 +266,14 @@ def keep_only_latest_progress(
             "UPDATE codex_runs SET entry_id = ? WHERE id = ?",
             (entry_id, run_id),
         )
+    conn.execute(
+        "DELETE FROM questions WHERE session_id = ? AND entry_id != ?",
+        (session_id, entry_id),
+    )
+    conn.execute(
+        "DELETE FROM progress_entries WHERE session_id = ? AND id != ?",
+        (session_id, entry_id),
+    )
 
 
 def parse_json_field(row: sqlite3.Row | None, field: str, default: Any) -> Any:

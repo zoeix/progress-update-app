@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "app.db"
+CONTENT_TMP_PATH = DATA_DIR / "content-tmp.json"
 ENV_PATH = BASE_DIR / ".env"
 PROMPTS_DIR = BASE_DIR / "prompts"
 load_dotenv(ENV_PATH)
@@ -32,4 +33,3 @@ STATE_READY_FOR_REVIEW = "ready_for_review"
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
-

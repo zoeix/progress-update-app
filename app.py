@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
 import threading
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from tools.clickup import (
@@ -19,7 +20,7 @@ from tools.clickup import (
     post_clickup_comment,
     set_clickup_session_active,
 )
-from tools.config import BASE_DIR
+from tools.config import BASE_DIR, CONTENT_TMP_PATH, utc_now
 from tools.db import (
     get_db,
     get_latest_entry,
@@ -57,6 +58,30 @@ def on_startup() -> None:
 
 def stop_server_process() -> None:
     threading.Timer(0.5, lambda: os._exit(0)).start()
+
+
+def save_progress_content_tmp(task_id: str, progress_text: str) -> None:
+    CONTENT_TMP_PATH.parent.mkdir(exist_ok=True)
+    CONTENT_TMP_PATH.write_text(
+        json.dumps(
+            {
+                "task_id": task_id,
+                "progress_text": progress_text,
+                "saved_at": utc_now(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def strip_project_prefix(raw_input: str) -> str:
+    lines = raw_input.splitlines()
+    if lines and lines[0].strip().startswith("專案名稱:"):
+        return "\n".join(lines[1:]).strip()
+    return raw_input.strip()
 
 
 @app.get("/login")
@@ -168,11 +193,45 @@ def finish_progress():
     )
 
 
+@app.get("/api/progress-content/latest")
+def load_latest_progress_content():
+    if not has_clickup_config():
+        return JSONResponse({"ok": False, "message": "無資料"})
+    with get_db() as conn:
+        session = get_session(conn)
+        latest_entry = get_latest_entry(conn, session["id"])
+        if latest_entry is None:
+            return {"ok": False, "message": "無資料"}
+        content = (latest_entry["final_text"] or "").strip()
+        if not content:
+            content = strip_project_prefix(latest_entry["raw_input"] or "")
+        if not content:
+            return {"ok": False, "message": "無資料"}
+        return {"ok": True, "progress_text": content}
+
+
+@app.get("/api/progress-content/tmp")
+def load_tmp_progress_content():
+    try:
+        payload = json.loads(CONTENT_TMP_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"ok": False, "message": "無資料"}
+    content = str(payload.get("progress_text", ""))
+    if not content:
+        return {"ok": False, "message": "無資料"}
+    return {
+        "ok": True,
+        "task_id": str(payload.get("task_id", "")),
+        "progress_text": content,
+    }
+
+
 @app.post("/progress")
 def submit_progress(
     task_id: str = Form(...),
     progress_text: str = Form(...),
 ):
+    save_progress_content_tmp(task_id, progress_text)
     if not has_clickup_config():
         return RedirectResponse("/login", status_code=303)
     try:
