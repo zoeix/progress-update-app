@@ -468,7 +468,7 @@
             </div>
 
             <div class="button-row">
-              <button type="submit">檢查進度</button>
+              <button type="submit">{{ "檢查進度2" if vscode_mode else "檢查進度" }}</button>
               <button class="secondary-button" type="submit" formaction="/upload" data-confirm-upload="確定要將目前進度上傳到 ClickUp 嗎？">上傳進度</button>
             </div>
             <div class="submit-status" aria-live="polite">正在處理，請稍候...</div>
@@ -545,7 +545,7 @@
           } else if (status && submitAction.endsWith("/finish")) {
             status.textContent = "正在重設進度並結束服務，請稍候...";
           } else if (status) {
-            status.textContent = "正在檢查進度，請稍候...";
+            status.textContent = {{ '"已寫入 bridge/prompt.md，正在等待 bridge/res.json..."' if vscode_mode else '"正在檢查進度，請稍候..."' }};
           }
           form.querySelectorAll("button").forEach((button) => {
             button.disabled = true;

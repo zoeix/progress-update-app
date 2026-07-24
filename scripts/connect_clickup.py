@@ -10,7 +10,8 @@ import sys
 BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BASE_DIR))
 
-from app import connect_clickup, find_codex_bin, get_clickup_list_id, get_clickup_token, init_db
+from tools.clickup import connect_clickup, find_codex_bin, get_clickup_list_id, get_clickup_token
+from tools.db import init_db
 
 
 def fail(message: str) -> None:
